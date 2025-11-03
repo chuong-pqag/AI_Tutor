@@ -1,0 +1,4 @@
+﻿id,ho_ten,ngay_sinh,gioi_tinh,email,lop_id,ma_hoc_sinh,mat_khau
+,Nguyễn Văn An,5/10/2017,Nam,an.nv@email.com,2bd7853e-080e-4f24-993b-2031d0397e95,HS0001,1234
+,Trần Thị Bình,1/20/2018,Nữ,,f6bcc95e-07fb-4b1f-b4d2-02963f9719b5,HS0002,5678
+,Lê Văn Cường,6/20/2018,Nam,cuong.lv@email.com,f6bcc95e-07fb-4b1f-b4d2-02963f9719b5,HS0003,9012

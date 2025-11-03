@@ -1,0 +1,199 @@
+# ===============================================
+# 📝 Module Quản lý Bài học - manage_lessons.py
+# ===============================================
+import streamlit as st
+import pandas as pd
+import datetime
+import io
+import uuid
+import os
+from urllib.parse import unquote # Import để xử lý URL encoding
+# Import các hàm tiện ích và supabase client
+from . import crud_utils
+from backend.supabase_client import supabase
+
+# --- Hàm helper để upload/delete file PDF trên Supabase Storage (ĐÃ SỬA) ---
+BUCKET_NAME = "topic_pdfs" # Định nghĩa tên bucket
+
+def upload_pdf_to_storage(uploaded_file, lesson_id):
+    """Tải file PDF lên Supabase Storage và trả về URL công khai."""
+    if not uploaded_file:
+        return None
+    try:
+        file_ext = os.path.splitext(uploaded_file.name)[1].lower() # Chuyển đuôi file thành chữ thường
+        if file_ext != ".pdf":
+             st.error("Chỉ chấp nhận file định dạng PDF.")
+             return None
+
+        # Tạo tên file duy nhất và an toàn
+        safe_filename = "".join(c if c.isalnum() else "_" for c in os.path.splitext(uploaded_file.name)[0])
+        file_name = f"lesson_{lesson_id}_{safe_filename[:50]}{file_ext}"
+
+        # 💥 SỬA LỖI: Path trong bucket chỉ là tên file (hoặc thư mục con/tên file)
+        storage_path = file_name # Lưu trực tiếp vào bucket
+
+        # Tải file lên bucket
+        # Đọc nội dung file dưới dạng bytes
+        file_content = uploaded_file.getvalue()
+        supabase.storage.from_(BUCKET_NAME).upload(
+            path=storage_path,
+            file=file_content, # Truyền bytes content
+            file_options={"content-type": "application/pdf", "upsert": "true"} # Ghi đè nếu tồn tại
+        )
+        # Lấy URL công khai
+        public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(storage_path)
+        return public_url
+    except Exception as e:
+        # Cung cấp thông tin lỗi chi tiết hơn
+        st.error(f"Lỗi tải file PDF lên Storage '{BUCKET_NAME}': {e}")
+        # Kiểm tra xem có phải lỗi do policy không
+        if "policy" in str(e).lower():
+            st.warning("Kiểm tra lại Policy của bucket trên Supabase. Cần cho phép insert/update.")
+        return None
+
+def delete_pdf_from_storage(pdf_url):
+    """Xóa file PDF khỏi Supabase Storage dựa trên URL công khai."""
+    if not pdf_url:
+        return
+    try:
+        # 💥 SỬA LỖI: Tách path file chính xác hơn từ URL công khai
+        # Ví dụ URL: https://<project_ref>.supabase.co/storage/v1/object/public/topic_pdfs/lesson_uuid_filename.pdf
+        # Path cần lấy là: "lesson_uuid_filename.pdf" (phần sau tên bucket)
+        path_parts = pdf_url.split(f'/{BUCKET_NAME}/')
+        if len(path_parts) > 1:
+            # Giải mã URL encoding nếu tên file có ký tự đặc biệt (ví dụ: dấu cách thành %20)
+            file_path_encoded = path_parts[1]
+            file_path = unquote(file_path_encoded)
+
+            # Thực hiện xóa
+            response = supabase.storage.from_(BUCKET_NAME).remove([file_path])
+            # st.toast(f"Đã yêu cầu xóa file: {file_path}") # Thông báo (tùy chọn)
+            # Có thể kiểm tra response nếu cần
+        else:
+             st.warning(f"Không thể trích xuất đường dẫn file từ URL: {pdf_url}")
+
+    except Exception as e:
+        st.warning(f"Lỗi khi xóa file PDF ({pdf_url}) trên Storage: {e}")
+        # Kiểm tra xem có phải lỗi do policy không
+        if "policy" in str(e).lower():
+            st.warning("Kiểm tra lại Policy của bucket trên Supabase. Cần cho phép delete.")
+# --- Hết hàm helper ---
+
+
+def render(chu_de_options):
+    """Hiển thị giao diện quản lý Bài học."""
+    st.subheader("📝 Quản lý Bài học")
+    tab_list, tab_add, tab_import = st.tabs(["📑 Danh sách & Sửa", "➕ Thêm mới", "📤 Import Excel"])
+    table_name = "bai_hoc"
+
+    # --- Tab Thêm mới ---
+    with tab_add:
+        # ... (Code form thêm mới giữ nguyên, sẽ sử dụng hàm upload đã sửa) ...
+        st.markdown("#### Thêm bài học mới")
+        if not chu_de_options: st.warning("⚠️ Cần có Chủ đề."); st.stop()
+        with st.form("add_lesson_form", clear_on_submit=False):
+            ten_bai_hoc = st.text_input("Tên bài học *"); chu_de_ten = st.selectbox("Thuộc Chủ đề *", list(chu_de_options.keys()), key="lesson_add_cd"); thu_tu = st.number_input("Thứ tự", min_value=0, value=0, step=1); mo_ta = st.text_area("Mô tả")
+            uploaded_pdf = st.file_uploader("Tải Nội dung PDF", type=["pdf"], key="lesson_pdf_upload")
+            submitted = st.form_submit_button("Thêm bài học")
+            if submitted:
+                if not ten_bai_hoc: st.error("Tên bài học trống.")
+                else:
+                    selected_chu_de_id = chu_de_options.get(chu_de_ten);
+                    if not selected_chu_de_id: st.error("Chủ đề không hợp lệ.")
+                    else:
+                        try:
+                            insert_payload = {"ten_bai_hoc": ten_bai_hoc, "chu_de_id": selected_chu_de_id, "thu_tu": thu_tu, "mo_ta": mo_ta if mo_ta else None}
+                            response = supabase.table(table_name).insert(insert_payload).execute()
+                            if response.data and len(response.data) > 0:
+                                new_lesson_id = response.data[0]['id']; pdf_url = None
+                                if uploaded_pdf:
+                                    st.info("Đang tải PDF...")
+                                    pdf_url = upload_pdf_to_storage(uploaded_pdf, new_lesson_id) # Gọi hàm đã sửa
+                                    if pdf_url: supabase.table(table_name).update({"noi_dung_pdf_url": pdf_url}).eq("id", new_lesson_id).execute(); st.success(f"Đã thêm '{ten_bai_hoc}' và PDF!")
+                                    else: st.warning(f"Đã thêm '{ten_bai_hoc}' nhưng lỗi tải PDF.")
+                                else: st.success(f"Đã thêm '{ten_bai_hoc}' (không có PDF).")
+                                crud_utils.clear_cache_and_rerun()
+                            else: st.error("Lỗi thêm vào CSDL.")
+                        except Exception as e: st.error(f"Lỗi: {e}")
+
+    # --- Tab Danh sách & Sửa/Xóa ---
+    with tab_list:
+        # ... (Code hiển thị danh sách và form sửa/xóa giữ nguyên, sẽ dùng hàm upload/delete đã sửa) ...
+        df_lesson_original = crud_utils.load_data(table_name)
+        if not df_lesson_original.empty:
+            chu_de_id_map = {id_: name for name, id_ in chu_de_options.items()}; df_lesson_display = df_lesson_original.copy(); df_lesson_display['chu_de_id'] = df_lesson_display['chu_de_id'].astype(str).map(chu_de_id_map).fillna("N/A"); df_lesson_display = df_lesson_display.sort_values(by=["chu_de_id", "thu_tu"], ascending=[True, True]).reset_index(drop=True)
+            df_lesson_display = df_lesson_display.rename(columns={"chu_de_id":"Chủ đề", "ten_bai_hoc": "Tên bài học", "thu_tu": "Thứ tự", "noi_dung_pdf_url": "Link PDF"})
+            cols_display_lesson = ["id", "Tên bài học", "Chủ đề", "Thứ tự", "Link PDF"]
+            st.info("Nhấp vào hàng để Sửa/Xóa.")
+            gb = st.dataframe(df_lesson_display[cols_display_lesson], key="lesson_df_select", hide_index=True, use_container_width=True, on_select="rerun", selection_mode="single-row")
+            selected_rows = gb.selection.rows; selected_item_original = None
+            if selected_rows: original_id = df_lesson_display.iloc[selected_rows[0]]['id']; st.session_state['lesson_selected_item_id'] = original_id
+            if 'lesson_selected_item_id' in st.session_state:
+                selected_id = st.session_state['lesson_selected_item_id']; original_item_df = df_lesson_original[df_lesson_original['id'] == selected_id]
+                if not original_item_df.empty: selected_item_original = original_item_df.iloc[0].to_dict()
+            if selected_item_original:
+                with st.expander("Sửa/Xóa Bài học", expanded=True):
+                    with st.form("edit_lesson_form"):
+                        st.text(f"ID: {selected_item_original['id']}")
+                        chu_de_df_local = crud_utils.load_data("chu_de"); chu_de_opts_local = {f"{row['ten_chu_de']} (L{row['lop']}-T{row['tuan']})": str(row['id']) for _, row in chu_de_df_local.iterrows()}
+                        ten_bai_hoc_edit = st.text_input("Tên bài học", value=selected_item_original.get("ten_bai_hoc", "")); current_cd_id = str(selected_item_original.get("chu_de_id","")); current_cd_name = next((name for name, id_ in chu_de_opts_local.items() if id_ == current_cd_id), None); cd_idx = list(chu_de_opts_local.keys()).index(current_cd_name) if current_cd_name in chu_de_opts_local else 0; chu_de_ten_edit = st.selectbox("Thuộc Chủ đề", list(chu_de_opts_local.keys()), index=cd_idx)
+                        thu_tu_edit = st.number_input("Thứ tự", value=selected_item_original.get("thu_tu", 0), step=1); mo_ta_edit = st.text_area("Mô tả", value=selected_item_original.get("mo_ta","") or "")
+                        current_pdf_url = selected_item_original.get("noi_dung_pdf_url");
+                        if current_pdf_url: st.markdown(f"**PDF hiện tại:** [Xem]({current_pdf_url})")
+                        else: st.caption("Chưa có PDF.")
+                        uploaded_pdf_edit = st.file_uploader("Tải PDF mới", type=["pdf"], key="lesson_pdf_edit"); delete_pdf_flag = st.checkbox("Xóa PDF hiện tại", key="del_pdf_flag")
+                        col_update, col_delete, col_clear = st.columns(3)
+                        if col_update.form_submit_button("Lưu"):
+                            update_data = {"ten_bai_hoc": ten_bai_hoc_edit, "chu_de_id": chu_de_opts_local.get(chu_de_ten_edit), "thu_tu": thu_tu_edit, "mo_ta": mo_ta_edit if mo_ta_edit else None,}
+                            pdf_url_to_save = current_pdf_url
+                            pdf_error = False
+                            if delete_pdf_flag:
+                                st.info("Đang xóa PDF..."); delete_pdf_from_storage(current_pdf_url); pdf_url_to_save = None
+                            elif uploaded_pdf_edit:
+                                st.info("Đang tải PDF mới..."); new_pdf_url = upload_pdf_to_storage(uploaded_pdf_edit, selected_item_original['id']) # Gọi hàm đã sửa
+                                if new_pdf_url:
+                                    if current_pdf_url and current_pdf_url != new_pdf_url: delete_pdf_from_storage(current_pdf_url) # Xóa file cũ nếu khác
+                                    pdf_url_to_save = new_pdf_url
+                                else: pdf_error = True # Đánh dấu lỗi upload
+                            update_data["noi_dung_pdf_url"] = pdf_url_to_save
+                            if pdf_error: st.error("Lỗi tải PDF mới. URL PDF sẽ không được cập nhật.")
+                            try: supabase.table(table_name).update(update_data).eq("id", selected_item_original["id"]).execute(); st.success("Cập nhật!"); crud_utils.clear_cache_and_rerun()
+                            except Exception as e: st.error(f"Lỗi cập nhật CSDL: {e}")
+                        if col_delete.form_submit_button("❌ Xóa"):
+                            st.info("Đang xóa PDF (nếu có)..."); delete_pdf_from_storage(selected_item_original.get("noi_dung_pdf_url")) # Gọi hàm đã sửa
+                            try: supabase.table(table_name).delete().eq("id", selected_item_original["id"]).execute(); st.warning("Đã xóa!"); crud_utils.clear_cache_and_rerun()
+                            except Exception as e: st.error(f"Lỗi xóa: {e}")
+                        if col_clear.form_submit_button("Hủy"):
+                             if 'lesson_selected_item_id' in st.session_state: del st.session_state['lesson_selected_item_id']; st.rerun()
+        else: st.info("Chưa có bài học nào.")
+
+    # --- Tab Import Excel ---
+    with tab_import:
+        # ... (Code Import Excel giữ nguyên, không import file PDF qua Excel) ...
+        st.markdown("### 📤 Import bài học từ Excel")
+        sample_data_lesson = {'ten_bai_hoc': ['Bài 1'], 'chu_de_id': ['UUID CHỦ ĐỀ'], 'thu_tu': [1], 'mo_ta': ['Mô tả'], 'noi_dung_pdf_url': ['URL PDF (tùy chọn)']}
+        crud_utils.create_excel_download(pd.DataFrame(sample_data_lesson), "mau_import_bai_hoc.xlsx", sheet_name='DanhSachBaiHoc')
+        st.caption("Cột 'chu_de_id' phải chứa UUID (dạng text). PDF URL là tùy chọn.")
+        uploaded_lesson = st.file_uploader("Chọn file Excel Bài học", type=["xlsx"], key="lesson_upload")
+        if uploaded_lesson:
+            try:
+                df_upload_lesson = pd.read_excel(uploaded_lesson, dtype=str); st.dataframe(df_upload_lesson.head())
+                valid_chu_de_ids = list(chu_de_options.values()) if chu_de_options else []
+                if not valid_chu_de_ids: st.error("Chưa có chủ đề nào.")
+                elif st.button("🚀 Import Bài Học"):
+                    count = 0; errors = []
+                    with st.spinner("Đang import..."):
+                        for index, row in df_upload_lesson.iterrows():
+                            try:
+                                ten_bai_hoc = str(row['ten_bai_hoc']).strip(); chu_de_id = str(row['chu_de_id']).strip(); thu_tu_val = pd.to_numeric(row.get('thu_tu', 0), errors='coerce'); mo_ta = str(row.get('mo_ta', '')).strip() if pd.notna(row.get('mo_ta')) else None; pdf_url = str(row.get('noi_dung_pdf_url', '')).strip() if pd.notna(row.get('noi_dung_pdf_url')) else None
+                                if not ten_bai_hoc: raise ValueError("Tên bài học trống.")
+                                if chu_de_id not in valid_chu_de_ids: raise ValueError(f"Chu de ID '{chu_de_id}' không hợp lệ.")
+                                if pd.isna(thu_tu_val): raise ValueError("Thứ tự không hợp lệ.")
+                                thu_tu = int(thu_tu_val)
+                                if pdf_url and (not pdf_url.startswith("http://") and not pdf_url.startswith("https://")): raise ValueError("PDF URL không hợp lệ.")
+                                insert_data = {"ten_bai_hoc": ten_bai_hoc, "chu_de_id": chu_de_id, "thu_tu": thu_tu, "mo_ta": mo_ta, "noi_dung_pdf_url": pdf_url}
+                                supabase.table(table_name).insert(insert_data).execute(); count += 1
+                            except Exception as e: errors.append(f"Dòng {index + 2}: {e}")
+                    st.success(f"✅ Import {count} bài học."); crud_utils.clear_cache_and_rerun()
+                    if errors: st.error("Lỗi:"); st.code("\n".join(errors))
+            except Exception as e: st.error(f"Lỗi đọc file: {e}")
