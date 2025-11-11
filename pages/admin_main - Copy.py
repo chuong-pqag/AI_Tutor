@@ -148,19 +148,13 @@ with col2:
                 chu_de_id_list=chu_de_id_list_global # List [id]
             )
         elif menu == "📝 Bài học":
-            manage_lessons.render(
-                mon_hoc_options=mon_hoc_options_global,
-                chu_de_df=chu_de_df_global,  # Pass the full DataFrame
-                chu_de_options=chu_de_options_global  # Keep this for the "Thêm mới" tab
-            )
+            manage_lessons.render() # Truyền {name_display: id} của Chủ đề
         elif menu == "🎥 Video":
             manage_videos.render()
         elif menu == "❓ Câu hỏi":
             manage_questions.render(
-                mon_hoc_options=mon_hoc_options_global,  # Thêm dòng này
-                chu_de_df=chu_de_df_global,  # Thêm dòng này
-                chu_de_options=chu_de_options_global,
-                chu_de_id_list=chu_de_id_list_global
+                chu_de_options=chu_de_options_global, # Truyền {name_display: id} của Chủ đề
+                chu_de_id_list=chu_de_id_list_global # Truyền list [id] của Chủ đề
             )
         elif menu == "🧑‍🏫 Phân công":
             # Hàm render của Phân công tự load options bên trong nó

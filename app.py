@@ -2,7 +2,7 @@
 # 📱 Trang Đăng nhập - app.py (Cập nhật tải Môn học & Kiểm tra Lớp)
 # ===============================================
 import streamlit as st
-import sys
+# import sys
 from backend.supabase_client import supabase
 # Import hàm mới từ data_service
 from backend.data_service import get_subjects_by_grade # Chỉ cần import hàm này
@@ -172,7 +172,7 @@ with col_main:
                     st.error("❌ Tên đăng nhập hoặc mật khẩu không đúng.")
 
         st.caption("Phiên bản thử nghiệm AI Tutor dành cho học sinh Tiểu học.")
-        st.caption("Phaát triển bởi: Lâm Đạo Chương - Trường Tiểu học Dương Đông 2 - Phú Quốc - An Giang")
+        st.caption("Phát triển bởi: Lâm Đạo Chương - Trường Tiểu học Dương Đông 2 - Phú Quốc - An Giang")
         st.markdown("</div>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------

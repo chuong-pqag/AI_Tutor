@@ -1,5 +1,5 @@
 # ===============================================
-# 📘 Trang học sinh - students.py (Sửa lỗi chấm 0/10 + Thêm nút Làm lại)
+# 📘 Trang học sinh - students.py (ĐÃ CẬP NHẬT LƯU TRẠNG THÁI GỢI Ý AI CỐ ĐỊNH)
 # ===============================================
 import streamlit as st
 import pandas as pd
@@ -51,22 +51,24 @@ def logout():
 
 
 # ===============================================
-# ---- HÀM HỖ TRỢ MỚI CHO BÀI TẬP ----
+# ---- HÀM HỖ TRỢ CHO BÀI TẬP (Giữ nguyên) ----
 # ===============================================
 def clear_quiz_state(form_key_prefix: str, questions: list):
-    """Xóa các giá trị câu trả lời và cờ 'submitted' cho một bài tập."""
+    """Xóa các giá trị câu trả lời và cờ 'submitted' cho một bài tập và thông báo kết quả."""
     # Xóa cờ đã nộp
     submitted_key = f"submitted_{form_key_prefix}"
     if submitted_key in st.session_state:
         del st.session_state[submitted_key]
+
+    # Xóa trạng thái kết quả/gợi ý AI
+    if "show_test_result" in st.session_state:
+        del st.session_state["show_test_result"]
 
     # Xóa các câu trả lời đã lưu
     for q in questions:
         widget_key = f"{form_key_prefix}_{q['id']}"
         if widget_key in st.session_state:
             del st.session_state[widget_key]
-
-    # st.rerun() # Không cần rerun ở đây, on_click sẽ xử lý rerun
 
 
 # ===============================================
@@ -101,7 +103,6 @@ col1, col2 = st.columns([1, 5])
 
 # CỘT 1: THÔNG TIN HỌC SINH & ĐIỀU HƯỚNG (Giữ nguyên)
 with col1:
-    # ... (code cột 1 giữ nguyên) ...
     st.image("https://cdn-icons-png.flaticon.com/512/1144/1144760.png", width=120)
     st.markdown(f"<h1 class='student-name-title'>{ho_ten}</h1>", unsafe_allow_html=True)
     lop_display = f"Khối {current_lop}" if current_lop is not None else "Chưa có Khối"
@@ -134,7 +135,8 @@ with col1:
                 else:
                     try:
                         supabase.table("hoc_sinh").update({"mat_khau": new_pass}).eq("id",
-                                                                                     hoc_sinh_id).execute(); st.success(
+                                                                                     hoc_sinh_id).execute();
+                        st.success(
                             "Đổi PIN!")
                     except Exception as e:
                         st.error(f"Lỗi: {e}")
@@ -278,7 +280,7 @@ with col2:
             if pdf_url:
                 st.subheader("📄 Tài liệu");
                 st.link_button("📥 Tải xuống PDF", pdf_url, type="primary")
-                viewer_url = "https.://mozilla.github.io/pdf.js/web/viewer.html"
+                viewer_url = "https://mozilla.github.io/pdf.js/web/viewer.html"
                 import urllib.parse
 
                 encoded_pdf_url = urllib.parse.quote_plus(pdf_url)
@@ -291,7 +293,7 @@ with col2:
                     st.warning(f"Không thể nhúng PDF viewer: {e}. Vui lòng tải về.")
 
             # ===============================================
-            # ---- PHẦN LUYỆN TẬP (ĐÃ SỬA LỖI CHẤM ĐIỂM + LÀM LẠI) ----
+            # ---- PHẦN LUYỆN TẬP (Giữ nguyên) ----
             # ===============================================
             st.markdown("---");
             st.subheader("✏️ Luyện tập")
@@ -300,7 +302,8 @@ with col2:
                 st.info("Bài học này chưa có bài luyện tập.")
             else:
                 practice_exercises.sort(key=lambda x: (
-                x.get('muc_do') != 'biết', x.get('muc_do') != 'hiểu', x.get('muc_do') != 'vận dụng', x.get('tieu_de')))
+                    x.get('muc_do') != 'biết', x.get('muc_do') != 'hiểu', x.get('muc_do') != 'vận dụng',
+                    x.get('tieu_de')))
 
                 for exercise in practice_exercises:
                     exercise_id = str(exercise['id'])
@@ -408,15 +411,15 @@ with col2:
                                     is_correct_submit = False
                                     if q["loai_cau_hoi"] == "mot_lua_chon":
                                         if ans is not None and true_ans_list: is_correct_submit = (
-                                                    ans == true_ans_list[0])
+                                                ans == true_ans_list[0])
                                     elif q["loai_cau_hoi"] == "nhieu_lua_chon":
                                         if ans and true_ans_list: is_correct_submit = (set(ans) == set(true_ans_list))
                                     else:
                                         if ans and true_ans_list: true_ans_str_list = [t.lower() for t in
                                                                                        true_ans_list]; is_correct_submit = (
-                                                    ans.strip().lower() in true_ans_str_list)
+                                                ans.strip().lower() in true_ans_str_list)
                                     if is_correct_submit: correct_submit += 1; earned_points_submit += (
-                                                q["diem_so"] or 1)
+                                            q["diem_so"] or 1)
                                 score_submit = round(earned_points_submit / total_points_submit * 10,
                                                      2) if total_points_submit > 0 else 0
 
@@ -448,7 +451,7 @@ with col2:
             # ---- KẾT THÚC PHẦN LUYỆN TẬP ----
             # ===============================================
 
-        # ---- HIỂN THỊ BÀI KIỂM TRA CHỦ ĐỀ (ĐÃ SỬA LỖI CHẤM ĐIỂM + LÀM LẠI) ----
+        # ---- HIỂN THỊ BÀI KIỂM TRA CHỦ ĐỀ (ĐÃ SỬA GỌI HÀM GỢI Ý VÀ LƯU TRẠNG THÁI) ----
         if selected_topic_id:
             st.markdown("---")
             st.header(f"🏁 Kiểm tra Chủ đề: {selected_topic_name}")
@@ -469,30 +472,33 @@ with col2:
 
                         # 1. HIỂN THỊ KẾT QUẢ VÀ NÚT LÀM LẠI (nếu đã nộp)
                         if st.session_state.get(submitted_key_test, False):
-                            st.markdown("#### Kết quả của bạn:")
-                            correct_test = 0;
-                            total_points_test = 0.0;
-                            earned_points_test = 0.0
 
-                            for q in test_questions:
-                                widget_key = f"{form_key_prefix_test}_{q['id']}"
-                                ans = st.session_state.get(widget_key)
-                                true_ans_list = q["dap_an_dung"]  # list[str]
-                                total_points_test += (q["diem_so"] or 1)
-                                is_correct = False
-                                if q["loai_cau_hoi"] == "mot_lua_chon":
-                                    if ans is not None and true_ans_list: is_correct = (ans == true_ans_list[0])
-                                elif q["loai_cau_hoi"] == "nhieu_lua_chon":
-                                    if ans and true_ans_list: is_correct = (set(ans) == set(true_ans_list))
-                                else:
-                                    if ans and true_ans_list: true_ans_str_list = [t.lower() for t in
-                                                                                   true_ans_list]; is_correct = (
-                                                ans.strip().lower() in true_ans_str_list)
-                                if is_correct: correct_test += 1; earned_points_test += (q["diem_so"] or 1)
+                            # --- HIỂN THỊ KẾT QUẢ VÀ GỢI Ý ĐÃ LƯU TỪ SESSION ---
+                            if "show_test_result" in st.session_state:
+                                result = st.session_state["show_test_result"]
 
-                            score_test = round(earned_points_test / total_points_test * 10,
-                                               2) if total_points_test > 0 else 0
-                            st.success(f"🎯 Kết quả KT: **{score_test}/10** ({correct_test}/{len(test_questions)} đúng)")
+                                # Hiển thị điểm
+                                st.markdown("#### Kết quả của bạn:")
+                                st.success(
+                                    f"🎯 Kết quả KT: **{result['score']}/10** ({result['correct']}/{result['total']} đúng)")
+
+                                st.markdown("---")
+                                st.subheader("💡 Gợi ý AI")
+
+                                # Hiển thị log hệ thống
+                                if result["action_text"]:
+                                    st.info(result["action_text"])
+
+                                # Hiển thị tin nhắn chi tiết (advance, review, remediate)
+                                for msg in result["messages"]:
+                                    if msg["type"] == "success":
+                                        st.success(msg["text"], icon="🎉")
+                                    elif msg["type"] == "warning":
+                                        st.warning(msg["text"], icon="🤔")
+                                    elif msg["type"] == "error":
+                                        st.error(msg["text"], icon="⚠️")
+
+                            # --- HẾT PHẦN HIỂN THỊ CỐ ĐỊNH ---
 
                             # Nút Làm lại
                             st.button(
@@ -541,21 +547,30 @@ with col2:
                                     is_correct_submit_test = False
                                     if q["loai_cau_hoi"] == "mot_lua_chon":
                                         if ans is not None and true_ans_list: is_correct_submit_test = (
-                                                    ans == true_ans_list[0])
+                                                ans == true_ans_list[0])
                                     elif q["loai_cau_hoi"] == "nhieu_lua_chon":
                                         if ans and true_ans_list: is_correct_submit_test = (
-                                                    set(ans) == set(true_ans_list))
+                                                set(ans) == set(true_ans_list))
                                     else:
                                         if ans and true_ans_list: true_ans_str_list = [t.lower() for t in
                                                                                        true_ans_list]; is_correct_submit_test = (
-                                                    ans.strip().lower() in true_ans_str_list)
+                                                ans.strip().lower() in true_ans_str_list)
                                     if is_correct_submit_test: correct_submit_test += 1; earned_points_submit_test += (
-                                                q["diem_so"] or 1)
+                                            q["diem_so"] or 1)
                                 score_submit_test = round(earned_points_submit_test / total_points_submit_test * 10,
                                                           2) if total_points_submit_test > 0 else 0
 
+                                # Vùng lưu trữ thông báo (KHỞI TẠO VÀ LƯU KẾT QUẢ ĐIỂM)
+                                st.session_state["show_test_result"] = {
+                                    "score": score_submit_test,
+                                    "correct": correct_submit_test,
+                                    "total": len(test_questions),
+                                    "messages": [],
+                                    "action_text": ""
+                                }
+
                                 # Gọi AI và xử lý gợi ý
-                                if current_tuan is not None and current_lop is not None:
+                                if current_tuan is not None and current_lop is not None and selected_subject_name is not None:
                                     try:
                                         lop_int_kt = int(current_lop)
                                         save_test_result(hoc_sinh_id=hoc_sinh_id, bai_tap_id=test_id,
@@ -563,45 +578,59 @@ with col2:
                                                          so_cau_dung=correct_submit_test, tong_cau=len(test_questions),
                                                          tuan_kiem_tra=current_tuan, lop=lop_int_kt)
 
-                                        # Chỉ hiển thị gợi ý AI sau khi nộp bài KT
-                                        st.markdown("---");
-                                        st.subheader("💡 Gợi ý AI")
+                                        # Gọi hàm generate_recommendation
                                         rec_data = generate_recommendation(hoc_sinh_id=hoc_sinh_id,
                                                                            chu_de_id=selected_topic_id,
-                                                                           diem=score_submit_test, lop=lop_int_kt,
-                                                                           tuan=current_tuan)
+                                                                           diem=score_submit_test,
+                                                                           lop=lop_int_kt,
+                                                                           tuan=current_tuan,
+                                                                           mon_hoc_name=selected_subject_name
+                                                                           )
+
                                         if latest_suggestion_id:
-                                            try:
-                                                update_learning_status(latest_suggestion_id, "Đã hoàn thành")
-                                            except Exception as e:
-                                                st.warning(f"Lỗi cập nhật trạng thái gợi ý cũ: {e}")
+                                            update_learning_status(latest_suggestion_id, "Đã hoàn thành")
+
+                                        # LƯU THÔNG BÁO VÀO SESSION STATE
                                         if rec_data:
-                                            st.info(
-                                                f"Hệ thống: **{rec_data['action']}** (Mô hình: {rec_data['model']}, Conf: {rec_data['confidence']:.2f})")
+                                            st.session_state["show_test_result"][
+                                                "action_text"] = f"Hệ thống: **{rec_data['action']}** (Mô hình: {rec_data['model']}, Conf: {rec_data['confidence']:.2f})"
+
                                             chu_de_de_xuat_id = rec_data.get("suggested_topic_id")
                                             ten_chu_de_de_xuat = selected_topic_name
+
                                             if chu_de_de_xuat_id:
                                                 topic_suggested_info = get_topic_by_id(chu_de_de_xuat_id)
                                                 if topic_suggested_info: ten_chu_de_de_xuat = topic_suggested_info[
                                                     "ten_chu_de"]
+
+                                            # Tạo tin nhắn chi tiết
                                             if rec_data["action"] == "advance":
-                                                st.success(f"🎉 **Gợi ý:** Học chủ đề **{ten_chu_de_de_xuat}**.")
+                                                msg = f"🎉 **Gợi ý:** Học chủ đề **{ten_chu_de_de_xuat}**."
+                                                st.session_state["show_test_result"]["messages"].append(
+                                                    {"type": "success", "text": msg})
                                             elif rec_data["action"] == "review":
-                                                st.warning(f"🤔 **Gợi ý:** Ôn tập **{selected_topic_name}**.")
+                                                msg = f"🤔 **Gợi ý:** Ôn tập **{selected_topic_name}**."
+                                                st.session_state["show_test_result"]["messages"].append(
+                                                    {"type": "warning", "text": msg})
                                             elif rec_data["action"] == "remediate":
                                                 if chu_de_de_xuat_id != selected_topic_id:
-                                                    st.error(
-                                                        f"⚠️ **Gợi ý:** Học lại tiền đề: **{ten_chu_de_de_xuat}**.")
+                                                    msg = f"⚠️ **Gợi ý:** Học lại tiền đề: **{ten_chu_de_de_xuat}**."
+                                                    st.session_state["show_test_result"]["messages"].append(
+                                                        {"type": "error", "text": msg})
                                                 else:
-                                                    st.error(f"⚠️ **Gợi ý:** Học lại **{selected_topic_name}**.")
+                                                    msg = f"⚠️ **Gợi ý:** Học lại **{selected_topic_name}**."
+                                                    st.session_state["show_test_result"]["messages"].append(
+                                                        {"type": "error", "text": msg})
                                         else:
-                                            st.error("Không thể tạo gợi ý AI.")
+                                            st.session_state["show_test_result"]["messages"].append(
+                                                {"type": "error", "text": "Không thể tạo gợi ý AI."})
+
                                     except Exception as e:
                                         st.error(f"Lỗi xử lý điểm/gọi AI: {e}")
                                 else:
-                                    st.warning("Thiếu thông tin Tuần hoặc Lớp để lưu KQ & gợi ý AI.")
+                                    st.warning("Thiếu thông tin Tuần, Lớp hoặc Môn học để lưu KQ & gợi ý AI.")
 
-                                # Rerun để hiển thị kết quả và gợi ý
+                                # Rerun để hiển thị kết quả
                                 st.rerun()
 
     # --- TAB 2: LỊCH SỬ HỌC TẬP (Giữ nguyên) ---
