@@ -19,7 +19,7 @@ from backend.utils import normalize_score
 from backend.supabase_client import supabase
 
 # --- Cấu hình ---
-MODEL_PATH = "model_recommender.pkl" # Đường dẫn tới model ML (nếu có)
+MODEL_PATH = "backend/model_recommender.pkl" # Đường dẫn tới model ML (nếu có)
 
 
 # =========================================================
