@@ -28,6 +28,7 @@ def map_action(score_norm):
 
 def load_data_from_supabase():
     """Tải dữ liệu từ Supabase và chuẩn bị features (X) và target (y)."""
+    # Lấy tất cả dữ liệu
     res = supabase.table('ket_qua_test').select('*').execute()
     data = res.data
     if not data:
@@ -36,10 +37,18 @@ def load_data_from_supabase():
 
     df = pd.DataFrame(data)
 
-    # --- Xử lý kiểu dữ liệu an toàn hơn ---
-    # Chuyển đổi 'diem' sang số, lỗi sẽ thành NaN
+    # --- SỬA LỖI KEYERROR: Lấy cột 'tuan_kiem_tra' và đổi tên thành 'tuan' ---
+    # Đảm bảo cột cần thiết tồn tại trước khi xử lý
+    if 'tuan_kiem_tra' not in df.columns:
+        print("Lỗi: Thiếu cột 'tuan_kiem_tra' trong dữ liệu tải về. Vui lòng kiểm tra schema CSDL.")
+        return None
+
+    # Đổi tên cột để logic phía dưới có thể sử dụng tên feature 'tuan'
+    df = df.rename(columns={'tuan_kiem_tra': 'tuan'})
+    # -------------------------------------------------------------------------
+
+    # Xử lý kiểu dữ liệu an toàn hơn
     df['diem'] = pd.to_numeric(df['diem'], errors='coerce')
-    # Loại bỏ các dòng có điểm không hợp lệ
     df = df.dropna(subset=['diem'])
     if df.empty:
         print("Không có dữ liệu 'diem' hợp lệ sau khi làm sạch.")
@@ -48,26 +57,23 @@ def load_data_from_supabase():
     # Chuẩn hóa điểm
     df['score_norm'] = df['diem'].astype(float) / 10.0
 
-    # --- SỬA LOGIC TẠO BIẾN MỤC TIÊU (y) ---
-    # Bỏ dòng y = df['is_pass']
-    # y = df['is_pass'] = (df['diem'].astype(float) >= 7).astype(int)
-
     # Áp dụng hàm map_action để tạo biến y mới
     y = df['score_norm'].apply(map_action)
-    # --- KẾT THÚC SỬA LOGIC ---
 
-    # Giữ nguyên features X (có thể thêm features khác sau này)
-    X = df[['score_norm', 'tuan']]  # Đảm bảo cột 'tuan' cũng tồn tại và hợp lệ
-    # Kiểm tra cột 'tuan'
+    # Lấy features X
+    # Kiểm tra cột 'tuan' (đã được đổi tên)
     if 'tuan' not in df.columns:
-        print("Lỗi: Thiếu cột 'tuan' trong dữ liệu tải về.")
+        # Trường hợp này không thể xảy ra nếu đổi tên thành công ở trên
+        print("Lỗi: Cột 'tuan' bị thiếu sau khi đổi tên.")
         return None
+
     # Chuyển đổi 'tuan' sang số nếu cần, xử lý lỗi
     df['tuan'] = pd.to_numeric(df['tuan'], errors='coerce')
     df = df.dropna(subset=['tuan'])  # Loại bỏ dòng nếu 'tuan' không hợp lệ
     if df.empty:
         print("Không có dữ liệu hợp lệ sau khi kiểm tra cột 'tuan'.")
         return None
+
     X = df[['score_norm', 'tuan']].astype(float)  # Đảm bảo X là kiểu float
     y = y.loc[X.index]  # Đảm bảo y khớp với X sau khi lọc NaN
 
