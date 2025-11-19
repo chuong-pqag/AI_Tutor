@@ -184,7 +184,11 @@ def get_topic_test_by_topic(chu_de_id: str):
         res = supabase.table("bai_tap").select("*").eq("chu_de_id", chu_de_id).eq("loai_bai_tap",
                                                                                   "kiem_tra_chu_de").limit(
             1).maybe_single().execute()
-        return res.data
+        # Kiểm tra nếu response có dữ liệu (data)
+        if res and res.data:
+            return res.data
+        else:
+            return None
     except Exception as e:
         print(f"Lỗi khi lấy bài kiểm tra chủ đề {chu_de_id}: {e}"); return None
 
@@ -288,9 +292,6 @@ def get_question_counts(chu_de_id: str = None, bai_hoc_id: str = None):
 # ===============================================
 # ---- KẾT THÚC HÀM get_question_counts ----
 # ===============================================
-# ===============================================
-# ---- KẾT THÚC HÀM get_question_counts ----
-# ===============================================
 
 def get_questions_for_exercise(bai_tap_id: str):
     """Lấy danh sách câu hỏi cho một BÀI TẬP cụ thể."""
@@ -341,14 +342,31 @@ def insert_question(chu_de_id: str, loai_cau_hoi: str, noi_dung: str, dap_an_dun
 
 # ... (Giữ nguyên tất cả các hàm còn lại: save_test_result, get_student_results_by_topic, v.v...)
 def save_test_result(hoc_sinh_id: str, bai_tap_id: str, chu_de_id: str, diem: float, so_cau_dung: int, tong_cau: int,
-                     tuan_kiem_tra: int, lop: int):
+                     tuan_kiem_tra: int, lop: int,
+                     diem_biet: float = 0, diem_hieu: float = 0, diem_van_dung: float = 0,
+                     tong_diem_biet: float = 0, tong_diem_hieu: float = 0,
+                     tong_diem_van_dung: float = 0):  # <-- 3 THAM SỐ MỚI
+    """
+    (ĐÃ NÂNG CẤP LẦN 2) Lưu kết quả test, bao gồm 6 cột điểm chi tiết.
+    """
     data = {"hoc_sinh_id": hoc_sinh_id, "bai_tap_id": bai_tap_id, "chu_de_id": chu_de_id, "diem": diem,
             "so_cau_dung": so_cau_dung, "tong_cau": tong_cau, "tuan_kiem_tra": tuan_kiem_tra, "lop": lop,
-            "ngay_kiem_tra": datetime.now().isoformat()}
+            "ngay_kiem_tra": datetime.now().isoformat(),
+
+            "diem_biet": diem_biet,
+            "diem_hieu": diem_hieu,
+            "diem_van_dung": diem_van_dung,
+
+            # (THÊM MỚI) Thêm 3 cột tổng điểm tối đa
+            "tong_diem_biet": tong_diem_biet,
+            "tong_diem_hieu": tong_diem_hieu,
+            "tong_diem_van_dung": tong_diem_van_dung
+            }
     try:
         return supabase.table("ket_qua_test").insert(data).execute()
     except Exception as e:
-        print(f"Lỗi lưu kết quả test: {e}"); return None
+        print(f"Lỗi lưu kết quả test: {e}");
+        return None
 
 
 def get_student_results_by_topic(hoc_sinh_id: str, chu_de_id: str):
@@ -374,13 +392,22 @@ def get_student_all_results(hoc_sinh_id: str):
 
 def insert_learning_path(hoc_sinh_id: str, loai_goi_y: str, chu_de_id: str = None, bai_hoc_id: str = None,
                          muc_do_de_xuat: str = "biết", diem_truoc_goi_y: float = None):
-    data = {"hoc_sinh_id": hoc_sinh_id, "loai_goi_y": loai_goi_y, "chu_de_id": chu_de_id, "bai_hoc_id": bai_hoc_id,
-            "muc_do_de_xuat": muc_do_de_xuat, "diem_truoc_goi_y": diem_truoc_goi_y}
+    # ... (data setup giữ nguyên) ...
+    data = {
+        "hoc_sinh_id": hoc_sinh_id,
+        "loai_goi_y": loai_goi_y,
+        "chu_de_id": chu_de_id,
+        "bai_hoc_id": bai_hoc_id,
+        "muc_do_de_xuat": muc_do_de_xuat,
+        "diem_truoc_goi_y": diem_truoc_goi_y,
+        "trang_thai": "Chưa thực hiện"
+    }
     data = {k: v for k, v in data.items() if v is not None}
     try:
         return supabase.table("lo_trinh_hoc").insert(data).execute()
     except Exception as e:
-        print(f"Lỗi thêm lộ trình: {e}"); raise e
+        print(f"Lỗi thêm lộ trình: {e}")
+        return None # <-- KHÔNG RAISE E NỮA, TRẢ VỀ NONE AN TOÀN
 
 
 def update_learning_status(lo_trinh_id: str, trang_thai: str):
@@ -442,3 +469,431 @@ def get_ai_logs(hoc_sinh_id: str):
         return res.data
     except Exception as e:
         print(f"Lỗi lấy log AI: {e}"); return []
+
+def get_teacher_exercises(giao_vien_id: str):
+    """Lấy danh sách bài tập (luyện tập & kiểm tra) do GV này tạo."""
+    try:
+        # LƯU Ý: Nếu chưa có cột giao_vien_id trong bai_tap, bạn phải thêm nó vào CSDL và code
+        # Giả định cột giao_vien_id đã được thêm vào bảng bai_tap.
+        res = supabase.table("bai_tap").select(
+            "*, chu_de(ten_chu_de, mon_hoc), bai_hoc(ten_bai_hoc)"
+        ).eq("giao_vien_id", giao_vien_id).order("created_at", desc=True).execute()
+        return res.data
+    except Exception as e:
+        print(f"Lỗi khi lấy danh sách bài tập của GV: {e}"); return []
+
+def can_delete_exercise(bai_tap_id: str):
+    """Kiểm tra xem đã có học sinh nào làm bài tập này chưa."""
+    try:
+        res = supabase.table("ket_qua_test").select("id", count="exact").eq("bai_tap_id", bai_tap_id).limit(1).execute()
+        # Trả về True nếu count == 0 (chưa có ai làm)
+        return res.count == 0
+    except Exception as e:
+        print(f"Lỗi khi kiểm tra xóa bài tập: {e}"); return False
+
+def update_exercise_title(bai_tap_id: str, new_title: str):
+    """Cập nhật tiêu đề bài tập."""
+    try:
+        return supabase.table("bai_tap").update({"tieu_de": new_title}).eq("id", bai_tap_id).execute()
+    except Exception as e:
+        print(f"Lỗi cập nhật tiêu đề bài tập: {e}"); raise e
+
+def delete_exercise_and_links(bai_tap_id: str):
+    """Xóa bài tập và các liên kết câu hỏi khỏi bai_tap_cau_hoi."""
+    try:
+        # Xóa liên kết trước
+        supabase.table("bai_tap_cau_hoi").delete().eq("bai_tap_id", bai_tap_id).execute()
+        # Xóa bài tập
+        return supabase.table("bai_tap").delete().eq("id", bai_tap_id).execute()
+    except Exception as e:
+        print(f"Lỗi xóa bài tập và liên kết: {e}");
+        raise e
+
+
+# =========================================================
+# 🆕 3️⃣ HÀM MỚI CHO DASHBOARD HỌC SINH
+# =========================================================
+import pandas as pd
+
+
+# Đảm bảo bạn đã import pandas ở đầu file nếu chưa có
+
+def get_student_overall_progress(hoc_sinh_id: str):
+    """
+    1.1. Tính Điểm trung bình Topic Test và đếm số Chủ đề đã kiểm tra.
+    """
+    try:
+        # Truy vấn tất cả kết quả test của học sinh, join với bai_tap để lấy loai_bai_tap
+        res = supabase.table("ket_qua_test").select(
+            "diem, chu_de_id, bai_tap(loai_bai_tap)"
+        ).eq("hoc_sinh_id", hoc_sinh_id).order("ngay_kiem_tra", desc=True).execute()
+
+        data = res.data or []
+        df = pd.DataFrame(data)
+
+        if df.empty:
+            return {"avg_score": 0.0, "completed_topics_count": 0, "total_topics_available": 0, "latest_score": 0.0}
+
+        # 1. Lọc chỉ lấy Bài kiểm tra Chủ đề
+        df['loai_bai_tap'] = df['bai_tap'].apply(lambda x: x.get('loai_bai_tap') if isinstance(x, dict) else None)
+        df_topic_test = df[df['loai_bai_tap'] == 'kiem_tra_chu_de'].copy()
+
+        if df_topic_test.empty:
+            return {"avg_score": 0.0, "completed_topics_count": 0, "total_topics_available": 0, "latest_score": 0.0}
+
+        # 2. Tính Điểm trung bình (chỉ trên Topic Test)
+        df_topic_test['diem'] = pd.to_numeric(df_topic_test['diem'], errors='coerce')
+        avg_score = round(df_topic_test['diem'].mean(), 2) if not df_topic_test['diem'].empty else 0.0
+
+        # 3. Đếm số chủ đề đã được kiểm tra (unique ID)
+        completed_topics_count = df_topic_test['chu_de_id'].nunique()
+
+        # 4. Lấy điểm gần nhất
+        latest_score = round(df_topic_test.iloc[0]['diem'], 2)
+
+        # 5. Tổng số chủ đề (tạm thời không tính)
+        total_topics_available = 0
+
+        return {
+            "avg_score": avg_score,
+            "completed_topics_count": completed_topics_count,
+            "total_topics_available": total_topics_available,
+            "latest_score": latest_score
+        }
+    except Exception as e:
+        print(f"Lỗi khi tính progress: {e}")
+        return {"avg_score": 0.0, "completed_topics_count": 0, "total_topics_available": 0, "latest_score": 0.0}
+
+
+def get_latest_ai_recommendation(hoc_sinh_id: str, mon_hoc: str = None, lop: int = None):
+    """
+    Lấy gợi ý AI MỚI NHẤT cho đúng môn học (nếu có).
+    - Chỉ lấy bản ghi 'Chưa thực hiện' hoặc 'Đang thực hiện' (bỏ NULL)
+    - Nếu không tìm thấy bản ghi cho môn đó, fallback: chọn topic tiếp theo chưa HT từ get_topics_status()
+    - Trả về dict chuẩn hoặc None
+    """
+    try:
+        # 1) Lấy tất cả gợi ý hiện có cho học sinh (trạng thái hợp lệ)
+        res = supabase.table("lo_trinh_hoc").select(
+            "*, suggested_topic:chu_de_id(ten_chu_de, mon_hoc, lop), suggested_lesson:bai_hoc_id(ten_bai_hoc)"
+        ).eq("hoc_sinh_id", hoc_sinh_id) \
+         .or_("trang_thai.eq.'Chưa thực hiện', trang_thai.eq.'Đang thực hiện'") \
+         .order("ngay_goi_y", desc=True).execute()
+
+        rows = res.data or []
+
+        # 2) Nếu có truyền mon_hoc thì lọc theo môn
+        if mon_hoc:
+            rows = [r for r in rows if r.get("suggested_topic", {}).get("mon_hoc") == mon_hoc]
+
+        # 3) Nếu có row → lấy row đầu (mới nhất)
+        if rows:
+            latest = rows[0]
+            rec = {
+                "id": latest.get("id"),
+                "action": latest.get("loai_goi_y"),
+                "diem_truoc_goi_y": latest.get("diem_truoc_goi_y"),
+                "chu_de_id": latest.get("chu_de_id"),
+                "bai_hoc_id": latest.get("bai_hoc_id"),
+                "mon_hoc": latest.get("suggested_topic", {}).get("mon_hoc"),
+                "lop": latest.get("suggested_topic", {}).get("lop"),
+                "ten_chu_de": latest.get("suggested_topic", {}).get("ten_chu_de"),
+                "ten_bai_hoc": latest.get("suggested_lesson", {}).get("ten_bai_hoc"),
+                "ngay_goi_y": latest.get("ngay_goi_y")
+            }
+            return rec
+
+        # 4) FALLBACK: nếu không có gợi ý trong lo_trinh_hoc cho môn đó, tự tạo gợi ý "topic tiếp theo chưa HT"
+        if mon_hoc and lop is not None:
+            topics = get_topics_status(hoc_sinh_id, mon_hoc, lop)
+            if topics:
+                # chọn topic đầu tiên chưa hoàn thành (theo tuần tăng dần)
+                next_topic = next((t for t in topics if not t.get("completed")), None)
+                if next_topic:
+                    return {
+                        "id": None,
+                        "action": "advance",
+                        "diem_truoc_goi_y": None,
+                        "chu_de_id": next_topic["id"],
+                        "bai_hoc_id": None,
+                        "mon_hoc": mon_hoc,
+                        "lop": lop,
+                        "ten_chu_de": next_topic["ten_chu_de"],
+                        "ten_bai_hoc": None,
+                        "ngay_goi_y": None
+                    }
+
+        # Nếu vẫn không tìm được, trả về None
+        return None
+
+    except Exception as e:
+        print(f"Lỗi get_latest_ai_recommendation: {e}")
+        return None
+
+def get_topics_status(hoc_sinh_id: str, mon_hoc_name: str, lop: int):
+    """
+    1.3. Lấy tất cả chủ đề cho môn học/lớp và đánh dấu trạng thái Đã/Chưa hoàn thành kiểm tra.
+    Sửa lỗi kiểu ID: chuẩn hóa tất cả về str để so sánh chính xác.
+    """
+    if lop is None or not mon_hoc_name:
+        return []
+
+    try:
+        # 1. Lấy TẤT CẢ chủ đề cho môn học/lớp này
+        all_topics_res = supabase.table("chu_de").select("id, ten_chu_de, tuan, prerequisite_id").eq("lop", lop).eq(
+            "mon_hoc", mon_hoc_name).order("tuan", desc=False).execute()
+        all_topics = all_topics_res.data or []
+
+        if not all_topics:
+            return []
+
+        # 2. Lấy tất cả bai_tap_id là 'kiem_tra_chu_de' cho các chu_de trong all_topics
+        topic_ids = [t['id'] for t in all_topics]
+
+        topic_test_res = supabase.table("bai_tap").select("id, chu_de_id").in_("chu_de_id", topic_ids).eq("loai_bai_tap",
+                                                                                               "kiem_tra_chu_de").execute()
+        topic_test_ids = [b['id'] for b in topic_test_res.data or []]
+        test_map = {str(b['id']): str(b['chu_de_id']) for b in (topic_test_res.data or [])}
+
+        # 3. Lấy ket_qua_test cho các bài kiểm tra này (và chuẩn hóa kiểu chu_de_id về str)
+        if not topic_test_ids:
+            completed_topic_ids = set()
+        else:
+            completed_res = supabase.table("ket_qua_test").select("chu_de_id").eq("hoc_sinh_id", hoc_sinh_id).in_(
+                "bai_tap_id", topic_test_ids).execute()
+            # CHUẨN HÓA: ép tất cả về str để so sánh đúng
+            completed_topic_ids = {str(r['chu_de_id']) for r in (completed_res.data or [])}
+
+        # 4. Kết hợp và gán trạng thái (chuẩn hóa id thành str)
+        topics_status = []
+        for topic in all_topics:
+            topic_id = str(topic['id'])
+            topics_status.append({
+                "id": topic_id,
+                "ten_chu_de": topic.get('ten_chu_de'),
+                "tuan": topic.get('tuan'),
+                "completed": topic_id in completed_topic_ids,
+                "prerequisite_id": topic.get('prerequisite_id')
+            })
+
+        return topics_status
+    except Exception as e:
+        print(f"Lỗi khi lấy topic status: {e}")
+        return []
+
+
+# =========================================================
+# 🆕 4️⃣ HÀM MỚI CHO TÍNH NĂNG THÔNG BÁO (ANNOUNCEMENT)
+# =========================================================
+
+def create_announcement(giao_vien_id: str, lop_id: str, tieu_de: str, noi_dung: str):
+    """
+    2.1. Giáo viên tạo một thông báo mới cho một lớp.
+    """
+    if not giao_vien_id or not lop_id or not tieu_de:
+        raise ValueError("Thiếu thông tin bắt buộc (GV, Lớp, Tiêu đề) để tạo thông báo.")
+
+    try:
+        data = {
+            "giao_vien_id": giao_vien_id,
+            "lop_id": lop_id,
+            "tieu_de": tieu_de,
+            "noi_dung": noi_dung
+        }
+        res = supabase.table("thong_bao").insert(data).execute()
+        return res.data
+    except Exception as e:
+        print(f"Lỗi khi tạo thông báo: {e}")
+        raise e
+
+
+def get_announcements_for_student(lop_id: str, limit: int = 5):
+    """
+    2.2. Lấy các thông báo mới nhất cho học sinh (dựa trên lop_id).
+    """
+    if not lop_id:
+        return []
+    try:
+        res = supabase.table("thong_bao").select(
+            "tieu_de, noi_dung, created_at, giao_vien(ho_ten)"
+        ).eq("lop_id", lop_id).order("created_at", desc=True).limit(limit).execute()
+
+        return res.data or []
+    except Exception as e:
+        print(f"Lỗi khi lấy thông báo cho học sinh: {e}")
+        return []
+
+
+def get_announcements_for_teacher(giao_vien_id: str):
+    """
+    2.3. Lấy tất cả thông báo đã gửi của một giáo viên.
+    """
+    if not giao_vien_id:
+        return []
+    try:
+        res = supabase.table("thong_bao").select(
+            "id, tieu_de, noi_dung, created_at, lop_id, lop_hoc(ten_lop)"
+        ).eq("giao_vien_id", giao_vien_id).order("created_at", desc=True).execute()
+
+        return res.data or []
+    except Exception as e:
+        print(f"Lỗi khi lấy thông báo cho giáo viên: {e}")
+        return []
+
+
+def delete_announcement(thong_bao_id: str, giao_vien_id: str):
+    """
+    (Hàm bổ sung) Xóa một thông báo (chỉ chủ sở hữu mới được xóa).
+    """
+    try:
+        res = supabase.table("thong_bao").delete().eq("id", thong_bao_id).eq("giao_vien_id", giao_vien_id).execute()
+        return res
+    except Exception as e:
+        print(f"Lỗi khi xóa thông báo: {e}")
+        raise e
+
+# =========================================================
+# 🆕 5️⃣ HÀM MỚI CHO QUẢN LÝ NĂM HỌC
+# =========================================================
+
+def get_current_school_year():
+    """
+    1.2. Lấy năm học hiện tại đang được cấu hình trong bảng cau_hinh_chung.
+    """
+    try:
+        res = supabase.table("cau_hinh_chung").select("value").eq("key", "current_school_year").maybe_single().execute()
+        return res.data.get("value") if res.data else None
+    except Exception as e:
+        print(f"Lỗi khi lấy năm học hiện tại: {e}")
+        return None
+
+
+# =========================================================
+# 🆕 6️⃣ HÀM MỚI CHO QUẢN LÝ LÊN LỚP
+# =========================================================
+
+def run_full_promotion(next_year: str):
+    """
+    Implements the full promotion logic: K1->K2, K2->K3, K3->K4, K4->K5, K5->Alumni.
+    1. Finds active classes (K1-K5) in the current school year.
+    2. Creates new classes (K2-K5) for the next_year.
+    3. Reassigns students to the new classes.
+    4. Gradates K5 students.
+    """
+    import uuid
+
+    # 1. Determine the current school year being promoted FROM
+    # We use a direct query since get_current_school_year() might be using cached data.
+    current_year_res = supabase.table("cau_hinh_chung").select("value").eq("key",
+                                                                           "current_school_year").maybe_single().execute()
+    current_year_from = current_year_res.data.get("value") if current_year_res.data else None
+
+    if not current_year_from:
+        # Nếu không có năm học để chuyển đi, ta dừng lại.
+        raise Exception("Không thể xác định Năm học hiện tại để bắt đầu quá trình Lên lớp.")
+
+    # 2. Get all active classes (lop_hoc) in the current school year (K1-K5)
+    # Chỉ chuyển những lớp thuộc năm học hiện tại.
+    active_classes_res = supabase.table("lop_hoc").select("id, ten_lop, khoi").eq("nam_hoc", current_year_from).in_(
+        "khoi", [1, 2, 3, 4, 5]).execute()
+    active_classes = active_classes_res.data or []
+
+    if not active_classes:
+        return {"promoted": 0, "graduated": 0, "message": "Không tìm thấy lớp học nào để chuyển."}
+
+    # Data structure to hold mappings for promotion
+    class_promotion_map = {}  # { old_lop_id: { new_lop_id, old_khoi, new_khoi } }
+    new_classes_to_insert = []
+
+    # 3. Process promotion structure and generate new class IDs
+    for old_class in active_classes:
+        old_khoi = old_class['khoi']
+
+        if old_khoi == 5:
+            # Graduation case
+            continue
+
+        new_khoi = old_khoi + 1  # K1->K2, K2->K3, K3->K4, K4->K5
+
+        # Create a new lop_hoc record
+        new_lop_id = str(uuid.uuid4())
+        new_classes_to_insert.append({
+            "id": new_lop_id,
+            "ten_lop": old_class['ten_lop'],
+            "khoi": new_khoi,
+            "nam_hoc": next_year
+        })
+
+        # Store mapping
+        class_promotion_map[old_class['id']] = {
+            "new_lop_id": new_lop_id,
+            "old_khoi": old_khoi,
+            "new_khoi": new_khoi
+        }
+
+    # --- PHASE 1: INSERT NEW CLASSES ---
+    if new_classes_to_insert:
+        try:
+            supabase.table("lop_hoc").insert(new_classes_to_insert).execute()
+        except Exception as e:
+            # Nếu insert thất bại (ví dụ: lớp đã tồn tại), ta dừng lại.
+            raise Exception(f"Lỗi khi tạo lớp học mới: {e}")
+
+    # --- PHASE 2: REASSIGN STUDENTS ---
+    promoted_students_count = 0
+
+    for old_lop_id, mapping in class_promotion_map.items():
+        new_lop_id = mapping['new_lop_id']
+
+        # 2a. Find student count for logging
+        count_res = supabase.table("hoc_sinh").select("id", count="exact").eq("lop_id", old_lop_id).execute()
+        student_count = count_res.count
+
+        if student_count > 0:
+            # 2b. Update lop_id for all students in the old class to the new class ID
+            supabase.table("hoc_sinh").update({"lop_id": new_lop_id}).eq("lop_id", old_lop_id).execute()
+            promoted_students_count += student_count
+
+    # --- PHASE 3: GRADUATION (K5) ---
+    graduated_count = 0
+
+    k5_classes_ids = [c['id'] for c in active_classes if c['khoi'] == 5]
+
+    if k5_classes_ids:
+        # Find student count for logging
+        k5_count_res = supabase.table("hoc_sinh").select("id", count="exact").in_("lop_id", k5_classes_ids).execute()
+        k5_student_count = k5_count_res.count
+
+        if k5_student_count > 0:
+            # Update their lop_id to NULL (Graduated/Alumni)
+            supabase.table("hoc_sinh").update({"lop_id": None}).in_("lop_id", k5_classes_ids).execute()
+            graduated_count = k5_student_count
+
+    return {
+        "promoted": promoted_students_count,
+        "graduated": graduated_count,
+        "message": "Quá trình lên lớp đã hoàn tất."
+    }
+
+
+def get_all_school_years():
+    """
+    Lấy tất cả các năm học độc nhất từ bảng lop_hoc (và thêm năm học hiện tại).
+    """
+    try:
+        # 1. Lấy tất cả năm học từ các lớp đã tạo
+        res = supabase.table("lop_hoc").select("nam_hoc").order("nam_hoc", desc=True).execute()
+
+        # Lấy các giá trị độc nhất (unique) và loại bỏ NULL
+        years = {r['nam_hoc'] for r in res.data if r.get('nam_hoc')}
+
+        # 2. Thêm năm học hiện tại (từ cấu hình chung) nếu nó chưa có
+        current_year = get_current_school_year()
+        if current_year:
+            years.add(current_year)
+
+        # 3. Trả về danh sách đã sắp xếp (năm mới nhất ở trên)
+        return sorted(list(years), reverse=True)
+    except Exception as e:
+        print(f"Lỗi khi lấy danh sách năm học: {e}")
+        return []

@@ -1,6 +1,5 @@
 # ===============================================
-# 👨‍💼 Trang quản trị Chính - admin_main.py (Nằm trong pages/)
-# (Chịu trách nhiệm bố cục và điều hướng)
+# 👨‍💼 Trang quản trị Chính - admin_main.py (ĐÃ SỬA LỖI GỌI HÀM RENDER)
 # ===============================================
 import streamlit as st
 import datetime
@@ -8,9 +7,11 @@ import pandas as pd
 import io
 import uuid
 
-# 💥 THAY ĐỔI IMPORT: Chỉ rõ đường dẫn từ thư mục gốc 'pages'
+# Import các hàm cần thiết để lọc dữ liệu
+from backend.data_service import get_all_school_years, get_current_school_year
+
+# Import các module con
 try:
-    # Giả định thư mục 'admin_pages' nằm BÊN TRONG thư mục 'pages'
     from pages.admin_pages import crud_utils
     from pages.admin_pages import manage_teachers
     from pages.admin_pages import manage_classes
@@ -21,8 +22,10 @@ try:
     from pages.admin_pages import manage_videos
     from pages.admin_pages import manage_questions
     from pages.admin_pages import manage_assignments
+    from pages.admin_pages import manage_promotion
 except ImportError as e:
-    st.error(f"Lỗi import module quản lý: {e}. Đảm bảo cấu trúc thư mục là 'pages/admin_pages/...' và file này nằm trong 'pages/'.")
+    st.error(
+        f"Lỗi import module quản lý: {e}. Đảm bảo cấu trúc thư mục là 'pages/admin_pages/...' và file này nằm trong 'pages/'.")
     st.stop()
 
 # Import supabase client từ backend
@@ -32,25 +35,21 @@ except ImportError:
     st.error("Lỗi: Không tìm thấy backend.supabase_client. Đảm bảo cấu trúc thư mục backend đúng.")
     st.stop()
 
-
 st.set_page_config(page_title="AI Tutor - Quản trị", page_icon="👨‍💼", layout="wide")
 
-# CSS: Ẩn sidebar chính VÀ CANH GIỮA CỘT 1
-# Bỏ ẩn SidebarNav để thấy tên trang
+# CSS (Giữ nguyên)
 st.markdown("""
     <style>
-    /* [data-testid="stSidebarNav"] {display: none;} */ /* Bỏ ẩn Nav */
-    [data-testid="stSidebar"] {display: none;} /* Vẫn ẩn sidebar chính */
+    [data-testid="stSidebar"] {display: none;} 
     div[data-testid="stHorizontalBlock"] > div:first-child > div {
         display: flex; flex-direction: column; align-items: center; text-align: center;
     }
     div[data-testid="stHorizontalBlock"] > div:first-child > div h1 { text-align: center; }
-    .stDataFrame { overflow-x: auto; } /* Chống tràn bảng */
+    .stDataFrame { overflow-x: auto; }
     </style>
 """, unsafe_allow_html=True)
 
 try:
-    # Điều chỉnh đường dẫn ảnh nếu cần, tính từ thư mục gốc AI_Tutor
     st.image("data/banner.jpg", use_container_width=True)
 except Exception:
     st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", use_container_width=True)
@@ -62,9 +61,9 @@ if "role" not in st.session_state or st.session_state["role"] != "admin":
     st.stop()
 
 # ===============================================
-# BỐ CỤC 2 CỘT (Trái: Info | Phải: Nội dung)
+# BỐ CỤC 2 CỘT (Info | Nội dung)
 # ===============================================
-col1, col2 = st.columns([1, 5]) # Tỷ lệ 1:5
+col1, col2 = st.columns([1, 5])
 
 # -----------------------------------------------
 # CỘT 1: THÔNG TIN ADMIN & ĐĂNG XUẤT
@@ -73,102 +72,99 @@ with col1:
     st.image("https://cdn-icons-png.flaticon.com/512/1077/1077063.png", width=120)
     st.title("Admin")
     st.divider()
-    if st.button("🔓 Đăng xuất", width='stretch', type="primary"): # Đã sửa width
-        st.session_state.clear(); st.switch_page("app.py")
+    if st.button("🔓 Đăng xuất", width='stretch', type="primary"):
+        st.session_state.clear();
+        st.switch_page("app.py")
 
 # -----------------------------------------------
 # CỘT 2: NỘI DUNG CHÍNH (Menu chọn & Gọi hàm con)
 # -----------------------------------------------
 with col2:
     st.title("👨‍💼 Quản trị hệ thống AI Tutor")
+
+    # === TẢI VÀ LƯU NĂM HỌC HIỆN TẠI (GLOBAL FILTER) ===
+    all_years = get_all_school_years()
+    current_year = get_current_school_year()
+
+    selected_year = current_year
+
+    if all_years:
+        default_index = all_years.index(current_year) if current_year in all_years else 0
+
+        selected_year = st.selectbox(
+            "📅 **Năm học đang xem:**",
+            all_years,
+            index=default_index,
+            key="global_selected_school_year"  # Ghi vào session state
+        )
+    else:
+        st.warning("Chưa có dữ liệu năm học.")
+
     st.markdown("---")
+    # === KẾT THÚC GLOBAL FILTER ===
+
     menu = st.radio(
         "Chọn khu vực quản lý:",
-        ["👩‍🏫 Giáo viên", "🏫 Lớp học", "👧 Học sinh", "📘 Môn học", "📚 Chủ đề", "📝 Bài học", "🎥 Video", "❓ Câu hỏi", "🧑‍🏫 Phân công"],
+        ["👩‍🏫 Giáo viên", "🏫 Lớp học", "👧 Học sinh", "📘 Môn học", "📚 Chủ đề", "📝 Bài học", "🎥 Video", "❓ Câu hỏi",
+         "🧑‍🏫 Phân công", "🎓 Lên lớp & Năm học"],
         horizontal=True
     )
     st.divider()
 
-    # --- Tải dữ liệu dùng chung ---
-    # Sử dụng hàm load_data từ crud_utils
-    # Đặt trong try-except để xử lý lỗi nếu bảng không tồn tại hoặc lỗi kết nối
+    # KHÔNG CẦN TẢI DỮ LIỆU TOÀN CỤC Ở ĐÂY NỮA
+    # (Trừ Môn học, vì nó là Master data và không đổi)
+    mon_hoc_options_global = {}
     try:
-        lop_df_global = crud_utils.load_data("lop_hoc")
-        lop_options_global = {row["ten_lop"]: str(row["id"]) for _, row in lop_df_global.iterrows()} if not lop_df_global.empty else {}
-
-        gv_df_global = crud_utils.load_data("giao_vien")
-        gv_options_global = {row["ho_ten"]: str(row["id"]) for _, row in gv_df_global.iterrows()} if not gv_df_global.empty else {}
-
         mon_hoc_df_global = crud_utils.load_data("mon_hoc")
-        mon_hoc_options_global = {row["ten_mon"]: str(row["id"]) for _, row in mon_hoc_df_global.iterrows()} if not mon_hoc_df_global.empty else {}
-
-        chu_de_df_global = crud_utils.load_data("chu_de")
-        chu_de_options_global = {f"{row['ten_chu_de']} (L{row['lop']}-T{row['tuan']})": str(row['id']) for _, row in chu_de_df_global.iterrows()} if not chu_de_df_global.empty else {}
-        chu_de_id_list_global = [str(row['id']) for _, row in chu_de_df_global.iterrows()] if not chu_de_df_global.empty else []
-        chu_de_options_with_none_global = {"Không có": None}; chu_de_options_with_none_global.update(chu_de_options_global)
-
-        bai_hoc_df_global = crud_utils.load_data("bai_hoc")
-        bai_hoc_options_global = {}
-        if not bai_hoc_df_global.empty and not chu_de_df_global.empty:
-             # Tạo map ID chủ đề -> Tên chủ đề để hiển thị trong options bài học
-             chu_de_id_to_name_map = {str(row['id']): row['ten_chu_de'] for _, row in chu_de_df_global.iterrows()}
-             bai_hoc_options_global = {
-                 # Hiển thị tên bài học kèm tên chủ đề (lấy từ map)
-                 f"{row['ten_bai_hoc']} ({chu_de_id_to_name_map.get(str(row.get('chu_de_id')), 'N/A')})": str(row['id'])
-                 for _, row in bai_hoc_df_global.iterrows()
-             }
-        elif not bai_hoc_df_global.empty: # Fallback nếu không có chủ đề
-            bai_hoc_options_global = {f"{row['ten_bai_hoc']} (ID: {str(row['id'])[:8]}...)": str(row['id']) for _, row in bai_hoc_df_global.iterrows()}
-
-    except Exception as data_load_error:
-        st.error(f"Lỗi tải dữ liệu ban đầu: {data_load_error}. Vui lòng kiểm tra kết nối CSDL và cấu trúc bảng.")
-        # Gán giá trị rỗng để tránh lỗi khi truyền tham số
-        lop_options_global, gv_options_global, mon_hoc_options_global = {}, {}, {}
-        chu_de_options_global, chu_de_id_list_global, chu_de_options_with_none_global = {}, [], {"Không có": None}
-        bai_hoc_options_global = {}
-
+        mon_hoc_options_global = {row["ten_mon"]: str(row["id"]) for _, row in
+                                  mon_hoc_df_global.iterrows()} if not mon_hoc_df_global.empty else {}
+    except Exception as e:
+        st.error(f"Lỗi tải dữ liệu Môn học ban đầu: {e}")
+        st.stop()
 
     # =============================================================
-    # GỌI HÀM RENDER TƯƠNG ỨNG TỪ MODULE CON
+    # GỌI HÀM RENDER (ĐÃ CẬP NHẬT TẤT CẢ CÁC LỆNH GỌI)
     # =============================================================
     try:
         if menu == "👩‍🏫 Giáo viên":
-            manage_teachers.render()
+            manage_teachers.render()  # Tự tải
         elif menu == "🏫 Lớp học":
-            manage_classes.render()
+            manage_classes.render()  # Tự tải
         elif menu == "👧 Học sinh":
-            manage_students.render(lop_options=lop_options_global)
+            manage_students.render()  # Tự tải
         elif menu == "📘 Môn học":
-            manage_subjects.render()
+            manage_subjects.render()  # Tự tải
+
+        # === KHU VỰC SỬA LỖI ===
+        # Các module này không cần truyền DataFrame vào nữa, chúng sẽ tự tải
+
         elif menu == "📚 Chủ đề":
-            manage_topics.render(
-                mon_hoc_options=mon_hoc_options_global,
-                chu_de_options_all=chu_de_options_global, # Dict {name_display: id}
-                chu_de_options_with_none=chu_de_options_with_none_global, # Dict {name_display: id} + None
-                chu_de_id_list=chu_de_id_list_global # List [id]
-            )
+            # Lỗi của bạn ở đây. Hàm render() đã tái cấu trúc không nhận tham số
+            manage_topics.render()
+
         elif menu == "📝 Bài học":
-            manage_lessons.render(
-                mon_hoc_options=mon_hoc_options_global,
-                chu_de_df=chu_de_df_global,  # Pass the full DataFrame
-                chu_de_options=chu_de_options_global  # Keep this for the "Thêm mới" tab
-            )
+            # Lỗi TypeError ở đây. Hàm render() đã tái cấu trúc không nhận DataFrame
+            manage_lessons.render(mon_hoc_options=mon_hoc_options_global)  # Chỉ truyền Môn học
+
         elif menu == "🎥 Video":
+            # Lỗi TypeError (trước đó) ở đây.
             manage_videos.render()
+
         elif menu == "❓ Câu hỏi":
-            manage_questions.render(
-                mon_hoc_options=mon_hoc_options_global,  # Thêm dòng này
-                chu_de_df=chu_de_df_global,  # Thêm dòng này
-                chu_de_options=chu_de_options_global,
-                chu_de_id_list=chu_de_id_list_global
-            )
+            # Lỗi KeyError (trước đó) ở đây.
+            manage_questions.render(mon_hoc_options=mon_hoc_options_global)  # Chỉ truyền Môn học
+
+        # === KẾT THÚC KHU VỰC SỬA LỖI ===
+
         elif menu == "🧑‍🏫 Phân công":
-            # Hàm render của Phân công tự load options bên trong nó
-            manage_assignments.render()
+            manage_assignments.render()  # Tự tải
+        elif menu == "🎓 Lên lớp & Năm học":
+            manage_promotion.render()  # Tự tải
 
     except AttributeError as attr_error:
-         st.error(f"Lỗi thuộc tính khi hiển thị mục '{menu}': {attr_error}. Có thể do module chưa được import đúng hoặc thiếu hàm render().")
-         st.exception(attr_error)
+        st.error(
+            f"Lỗi thuộc tính khi hiển thị mục '{menu}': {attr_error}. Có thể do module chưa được import đúng hoặc thiếu hàm render().")
+        st.exception(attr_error)
     except Exception as render_error:
         st.error(f"Đã xảy ra lỗi khi hiển thị mục '{menu}': {render_error}")
-        st.exception(render_error) # In traceback đầy đủ để debug
+        st.exception(render_error)

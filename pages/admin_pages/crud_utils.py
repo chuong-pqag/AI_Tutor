@@ -2,10 +2,14 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import io
 import uuid
 from backend.supabase_client import supabase
 import xlsxwriter
+import os
+import io
+from urllib.parse import unquote
+from gtts import gTTS
+from backend.tts_service import generate_and_upload_tts
 
 @st.cache_data(ttl=60)
 def load_data(table_name):
@@ -70,3 +74,13 @@ def create_excel_download(df_sample, filename, sheet_name='Sheet1'):
         )
     except Exception as e:
         st.error(f"Lỗi tạo file Excel mẫu: {e}")
+
+
+# ===============================================
+# 🔊 HÀM HELPER MỚI CHO TTS (TEXT-TO-SPEECH)
+# ===============================================
+
+# Đặt tên bucket của bạn (bạn phải tạo bucket này trong Supabase Storage)
+QUESTION_AUDIO_BUCKET = "question_audio"
+
+

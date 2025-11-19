@@ -39,9 +39,9 @@ st.markdown("""
 # BANNER FULL WIDTH (Giữ nguyên)
 # -------------------------------------------------------------
 try:
-    st.image("data/banner.jpg", use_container_width=True)
+    st.image("data/banner.jpg", width='stretch')
 except Exception:
-    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", use_container_width=True)
+    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", width='stretch')
 
 # -------------------------------------------------------------
 # HEADER (TEXT) (Giữ nguyên)
@@ -78,7 +78,7 @@ with col_main:
             ma_hoc_sinh = st.text_input("🔑 Mã học sinh (VD: HS0001)", key="hs_ma", max_chars=10)
             mat_khau = st.text_input("🔒 Mã PIN (4 chữ số)", type="password", key="hs_mk", max_chars=4)
 
-            if st.button("Đăng nhập Học sinh", use_container_width=True):
+            if st.button("Đăng nhập Học sinh", width='stretch'):
                 res = supabase.table("hoc_sinh").select("id, ho_ten, lop_id").eq("ma_hoc_sinh", ma_hoc_sinh.strip()).eq(
                     "mat_khau", mat_khau.strip()).execute()
 
@@ -141,7 +141,7 @@ with col_main:
             email = st.text_input("📧 Email giáo viên", key="gv_email")
             mat_khau = st.text_input("🔒 Mật khẩu", type="password", key="gv_mk")
 
-            if st.button("Đăng nhập Giáo viên", use_container_width=True):
+            if st.button("Đăng nhập Giáo viên", width='stretch'):
                 res = supabase.table("giao_vien").select("id, ho_ten, email").eq("email", email.strip()).eq("mat_khau",
                                                                                                             mat_khau.strip()).execute()
                 if res.data:
@@ -162,7 +162,7 @@ with col_main:
             tk = st.text_input("👤 Tên đăng nhập (admin)", key="qt_tk")
             mk = st.text_input("🔒 Mật khẩu (admin)", type="password", key="qt_mk")
 
-            if st.button("Đăng nhập Quản trị", use_container_width=True):
+            if st.button("Đăng nhập Quản trị", width='stretch'):
                 if tk == "admin" and mk == "admin":
                     st.session_state.clear()
                     st.session_state["role"] = "admin"
@@ -172,7 +172,8 @@ with col_main:
                     st.error("❌ Tên đăng nhập hoặc mật khẩu không đúng.")
 
         st.caption("Phiên bản thử nghiệm AI Tutor dành cho học sinh Tiểu học.")
-        st.caption("Phát triển bởi: Lâm Đạo Chương - Trường Tiểu học Dương Đông 2 - Phú Quốc - An Giang")
+        st.caption("Phát triển bởi: Lâm Đạo Chương - Trường Tiểu học Dương Đông 2")
+        st.caption("Địa chỉ: Dương Đông - Phú Quốc - An Giang. Phone: 0942111500")
         st.markdown("</div>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------

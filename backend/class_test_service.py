@@ -64,12 +64,14 @@ def generate_class_test(
     # Tạo bản ghi bai_tap (KIỂM TRA CHỦ ĐỀ)
     res_bai_tap = supabase.table("bai_tap").insert({
         "chu_de_id": chu_de_id,
-        "bai_hoc_id": None,
+        "bai_hoc_id": None,  # Loại kiểm tra chủ đề thường không có bai_hoc_id
         "tieu_de": ten_bai,
-        "mo_ta": f"Bài kiểm tra chủ đề do GV ({giao_vien_id}) giao. (B:{so_cau_biet}, H:{so_cau_hieu}, VD:{so_cau_van_dung})",
-        # Thêm mô tả
+        "mo_ta": f"Bài kiểm tra do GV ({giao_vien_id}) giao.",
         "loai_bai_tap": "kiem_tra_chu_de",
-        # Có thể thêm mức độ chung cho bài tập (ví dụ: 'tổng hợp') nếu cột bai_tap.muc_do cho phép
+        "tong_so_cau": len(selected_question_ids),
+        # === PHẦN CẦN THÊM ===
+        "giao_vien_id": giao_vien_id,
+        # ======================
     }).execute()
 
     if not res_bai_tap.data:

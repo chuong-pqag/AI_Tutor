@@ -1,267 +1,251 @@
-"""
-AI Tutor — Recommendation Engine (Đã cập nhật lọc theo Môn học)
---------------------------------
-Gợi ý lộ trình học CHỦ ĐỀ cá nhân hóa dựa trên kết quả BÀI KIỂM TRA CUỐI CHỦ ĐỀ.
-Hỗ trợ hai chế độ: Rule-based (mặc định), ML (nếu có model).
-
-Trigger: Chỉ gọi sau khi học sinh hoàn thành bài kiểm tra loại 'kiem_tra_chu_de'.
-"""
+# File: backend/recommendation_engine.py
+# (NÂNG CẤP LÕI AI LẦN 2 - CẬP NHẬT "CHÌA KHÓA" ĐẦU VÀO)
 
 import joblib
 import pandas as pd
-# Import các hàm data_service đã cập nhật
 from backend.data_service import (
     get_topic_by_id,
     insert_learning_path,
     log_ai_recommendation,
+    get_student_all_results # <-- THÊM MỚI (Để lấy kết quả mới nhất)
 )
 from backend.utils import normalize_score
 from backend.supabase_client import supabase
 
 # --- Cấu hình ---
-MODEL_PATH = "backend/model_recommender.pkl" # Đường dẫn tới model ML (nếu có)
-
+MODEL_PATH = "backend/model_recommender.pkl" 
 
 # =========================================================
-# 1️⃣ RULE-BASED ENGINE (Cho gợi ý Chủ đề)
+# 1️⃣ (KHÔNG THAY ĐỔI) RULE-BASED ENGINE (Dùng làm Fallback)
 # =========================================================
-
 def recommend_rule_based_topic(diem_normalized: float, current_topic_info: dict):
-    """
-    Logic rule-based đơn giản cho Chủ đề dựa trên điểm KIỂM TRA CHỦ ĐỀ:
-    - < 0.6: Học lại tiền đề hoặc ôn lại chủ đề hiện tại
-    - 0.6–0.8: Ôn tập chủ đề hiện tại
-    - >= 0.8: Tiến sang chủ đề mới
-    """
+    # ... (Giữ nguyên logic rule-based)
     if not current_topic_info:
-        # Trường hợp không tìm thấy thông tin chủ đề -> Mặc định ôn tập
         return {"action": "review", "suggested_topic_id": None, "confidence": 0.5}
-
-    current_topic_id = str(current_topic_info.get("id")) # Đảm bảo là string
+    current_topic_id = str(current_topic_info.get("id"))
     prerequisite_id = current_topic_info.get("prerequisite_id")
-    # Đảm bảo prerequisite_id cũng là string nếu không None
     if prerequisite_id is not None:
         prerequisite_id = str(prerequisite_id)
-
     if diem_normalized < 0.6:
         if prerequisite_id:
-            # Gợi ý học lại chủ đề tiền đề
-            return {
-                "action": "remediate",
-                "suggested_topic_id": prerequisite_id,
-                "confidence": 0.9
-            }
+            return {"action": "remediate", "suggested_topic_id": prerequisite_id, "confidence": 0.9}
         else:
-            # Không có tiền đề -> Gợi ý học lại/ôn tập chủ đề hiện tại
-            return {
-                "action": "remediate",
-                "suggested_topic_id": current_topic_id,
-                "confidence": 0.85
-            }
+            return {"action": "remediate", "suggested_topic_id": current_topic_id, "confidence": 0.85}
     elif diem_normalized < 0.8:
-        # Gợi ý ôn tập chủ đề hiện tại
-        return {
-            "action": "review",
-            "suggested_topic_id": current_topic_id,
-            "confidence": 0.7
-        }
+        return {"action": "review", "suggested_topic_id": current_topic_id, "confidence": 0.7}
     else:
-        # Gợi ý học chủ đề tiếp theo (ID sẽ được tìm bởi find_next_topic)
-        return {
-            "action": "advance",
-            "suggested_topic_id": None, # Sẽ tìm sau
-            "confidence": 0.8
-        }
+        return {"action": "advance", "suggested_topic_id": None, "confidence": 0.8}
+
 
 # =========================================================
-# 2️⃣ ML ENGINE (DecisionTree - Giữ nguyên)
+# 2️⃣ (ĐÃ CẬP NHẬT) ML ENGINE (Sử dụng Pipeline mới)
 # =========================================================
 
 def load_model():
-    """Tải mô hình DecisionTree nếu tồn tại."""
+    """Tải mô hình (Pipeline) nếu tồn tại."""
     try:
         model = joblib.load(MODEL_PATH)
         return model
     except Exception:
         return None
 
-def recommend_ml_topic(student_features: dict):
-    """Dự đoán gợi ý CHỦ ĐỀ bằng mô hình ML (nếu có)."""
+def recommend_ml_topic(student_features_df: pd.DataFrame):
+    """
+    Dự đoán gợi ý CHỦ ĐỀ bằng mô hình ML (Pipeline) mới.
+    Args:
+        student_features_df (pd.DataFrame): DataFrame chứa 5 cột features
+                                            ['pct_biet', 'pct_hieu', 'pct_van_dung', 'lop', 'mon_hoc']
+    """
     model = load_model()
     if not model:
         return None # Trả về None nếu không có model
 
     try:
-        # Lấy các feature cần thiết từ student_features
-        features_for_model = {
-            'score_norm': student_features.get('normalized_score'), # Đổi tên key nếu cần
-            'tuan': student_features.get('tuan')
-        }
-        # Kiểm tra None
-        if features_for_model['score_norm'] is None or features_for_model['tuan'] is None:
-             print("Cảnh báo ML: Thiếu score_norm hoặc tuan.")
-             return None
-
-        X = pd.DataFrame([features_for_model])
-        pred = model.predict(X)
-        # Giả sử mô hình trả về giá trị 0–2 tương ứng với hành động
+        # Pipeline (model) đã bao gồm preprocessor (OneHotEncoder, StandardScaler)
+        # nên chúng ta chỉ cần truyền DataFrame thô vào
+        pred = model.predict(student_features_df)
+        
         mapping = {0: "remediate", 1: "review", 2: "advance"}
-        predicted_action = mapping.get(int(pred[0]), "review") # Mặc định là review nếu lỗi
-
-        # Lấy xác suất nếu có (tùy thuộc model)
-        confidence = 0.9 # Giả định độ tin cậy cao cho ML
+        predicted_action = mapping.get(int(pred[0]), "review") 
+        
+        confidence = 0.9
         if hasattr(model, "predict_proba"):
             try:
-                confidence = model.predict_proba(X)[0].max()
-            except: pass # Bỏ qua nếu lỗi lấy proba
+                confidence = model.predict_proba(student_features_df)[0].max()
+            except: pass
 
         return {"action": predicted_action, "confidence": confidence}
 
     except Exception as e:
-        print(f"Lỗi khi dự đoán ML: {e}")
+        print(f"Lỗi khi dự đoán ML (Lần 2): {e}")
         return None
 
 
 # =========================================================
-# 3️⃣ HÀM HỖ TRỢ TÌM CHỦ ĐỀ TIẾP THEO (ĐÃ THÊM LỌC MÔN HỌC)
+# 3️⃣ (GIỮ NGUYÊN) HÀM HỖ TRỢ TÌM CHỦ ĐỀ TIẾP THEO
 # =========================================================
 
-def find_next_topic(lop: int, current_tuan: int, mon_hoc_name: str): # <--- THAM SỐ MỚI
-    """
-    Xác định ID (UUID string) của chủ đề kế tiếp dựa theo lớp, tuần hiện tại VÀ MÔN HỌC.
-    Giả định: chủ đề tiếp theo có tuan > hiện tại, cùng lớp và cùng môn học.
-    """
-    if lop is None or current_tuan is None or not mon_hoc_name:
-        return None
+def find_next_topic(lop: int, current_tuan: int, mon_hoc_name: str):
+    # ... (Giữ nguyên logic find_next_topic)
+    if lop is None or current_tuan is None or not mon_hoc_name: return None
     try:
         res = (
             supabase.table("chu_de")
-            .select("id") # Chỉ cần lấy ID
+            .select("id") 
             .eq("lop", lop)
-            .eq("mon_hoc", mon_hoc_name) # <--- LỌC THEO MÔN HỌC
+            .eq("mon_hoc", mon_hoc_name) 
             .gt("tuan", current_tuan)
-            .order("tuan", desc=False) # Sắp xếp tăng dần theo tuần
-            .limit(1) # Lấy chủ đề đầu tiên tìm thấy
+            .order("tuan", desc=False)
+            .limit(1) 
             .execute()
         )
         if res.data and len(res.data) > 0:
-            return str(res.data[0]["id"]) # Trả về UUID dạng string
-        return None # Không tìm thấy chủ đề tiếp theo
+            return str(res.data[0]["id"]) 
+        return None
     except Exception as e:
         print(f"Lỗi khi tìm chủ đề tiếp theo: {e}")
         return None
 
 # =========================================================
-# 4️⃣ WRAPPER — SINH GỢI Ý CHỦ ĐỀ (ĐÃ THÊM THAM SỐ VÀ LOGGING)
+# 4️⃣ (ĐÃ CẬP NHẬT) WRAPPER — SINH GỢI Ý (LÕI AI LẦN 2)
 # =========================================================
 
-def generate_recommendation(hoc_sinh_id: str, chu_de_id: str, diem: float, lop: int, tuan: int, mon_hoc_name: str): # <--- THAM SỐ MỚI
+def generate_recommendation(hoc_sinh_id: str, chu_de_id: str, diem: float, lop: int, tuan: int, mon_hoc_name: str):
     """
-    Sinh gợi ý học tập cho CHỦ ĐỀ tiếp theo dựa trên điểm BÀI KIỂM TRA CUỐI CHỦ ĐỀ.
-    Args:
-        hoc_sinh_id (str): UUID của học sinh.
-        chu_de_id (str): UUID của chủ đề vừa hoàn thành kiểm tra.
-        diem (float): Điểm bài kiểm tra cuối chủ đề (thang 10).
-        lop (int): Khối lớp của học sinh.
-        tuan (int): Tuần học của chủ đề vừa hoàn thành.
-        mon_hoc_name (str): Tên môn học của chủ đề vừa hoàn thành. <--- THAM SỐ MỚI
-    Returns:
-        dict: Chứa thông tin gợi ý ('action', 'suggested_topic_id', 'model', 'confidence')
-              hoặc None nếu có lỗi.
+    (NÂNG CẤP LẦN 2) Sinh gợi ý dựa trên 6 cột điểm %.
     """
-    # Lấy thông tin chủ đề hiện tại (cần prerequisite_id)
+    
+    # 1. Lấy thông tin chủ đề hiện tại (cần prerequisite_id)
     current_topic_info = get_topic_by_id(chu_de_id)
     if not current_topic_info:
         print(f"Lỗi: Không tìm thấy thông tin chủ đề ID {chu_de_id}")
         return None
+    
+    # 2. (MỚI) Lấy bản ghi ket_qua_test MỚI NHẤT (để lấy 6 cột điểm)
+    # Lưu ý: Hàm này giả định ui_quiz_engine.py đã LƯU KẾT QUẢ XONG
+    latest_result = None
+    try:
+        # Lấy 1 kết quả mới nhất của học sinh này (giả định đó là bài vừa nộp)
+        res_data = get_student_all_results(hoc_sinh_id) 
+        if res_data:
+            latest_result = res_data[0] # Lấy bản ghi mới nhất
+    except Exception as e:
+        print(f"Lỗi khi lấy kết quả test mới nhất: {e}")
+        latest_result = None
 
-    normalized_score = normalize_score(diem, max_score=10)
+    # 3. Chuẩn bị Features (X) cho Model Mới
+    student_features_df = None
+    if latest_result:
+        try:
+            # Lấy điểm đạt được
+            diem_biet = float(latest_result.get('diem_biet', 0))
+            diem_hieu = float(latest_result.get('diem_hieu', 0))
+            diem_van_dung = float(latest_result.get('diem_van_dung', 0))
+            # Lấy điểm tối đa
+            tong_biet = float(latest_result.get('tong_diem_biet', 0))
+            tong_hieu = float(latest_result.get('tong_diem_hieu', 0))
+            tong_van_dung = float(latest_result.get('tong_diem_van_dung', 0))
 
-    # Chuẩn bị feature input cho AI (cả Rule-based và ML)
-    student_features = {
-        "lop": lop,
-        "tuan": tuan,
-        "diem_raw": diem,
-        "normalized_score": normalized_score,
-        "mon_hoc": mon_hoc_name
-    }
+            # Tính toán Tỷ lệ %
+            pct_biet = (diem_biet / tong_biet) if tong_biet > 0 else 0
+            pct_hieu = (diem_hieu / tong_hieu) if tong_hieu > 0 else 0
+            pct_van_dung = (diem_van_dung / tong_van_dung) if tong_van_dung > 0 else 0
 
-    action = "review" # Hành động mặc định
+            # Tạo DataFrame (1 dòng) cho pipeline
+            student_features_df = pd.DataFrame({
+                'pct_biet': [pct_biet],
+                'pct_hieu': [pct_hieu],
+                'pct_van_dung': [pct_van_dung],
+                'lop': [lop],
+                'mon_hoc': [mon_hoc_name]
+            })
+        except Exception as e:
+            print(f"Lỗi khi tính toán Tỷ lệ %: {e}")
+            student_features_df = None
+
+    # 4. Gọi Model và Fallback
+    action = "review" # Mặc định
     confidence = 0.5
     model_version = "Rule-based (Default)"
-    suggested_topic_id = str(chu_de_id) # Mặc định gợi ý ôn lại chủ đề hiện tại
+    suggested_topic_id = str(chu_de_id) 
 
-    # 1️⃣ Thử mô hình ML nếu có
-    ml_rec = recommend_ml_topic(student_features)
+    ml_rec = None
+    if student_features_df is not None:
+        ml_rec = recommend_ml_topic(student_features_df)
+        
     if ml_rec:
         action = ml_rec["action"]
         confidence = ml_rec.get("confidence", 0.9)
-        model_version = "ML DecisionTree"
+        model_version = "AI Model (Lần 2 - Tỷ lệ %)"
     else:
-        # 2️⃣ Fallback sang rule-based
-        rule_rec = recommend_rule_based_topic(normalized_score, current_topic_info)
+        # Fallback sang rule-based (dùng điểm tổng)
+        normalized_score_fallback = normalize_score(diem, max_score=10)
+        rule_rec = recommend_rule_based_topic(normalized_score_fallback, current_topic_info)
         action = rule_rec["action"]
         suggested_topic_id = rule_rec["suggested_topic_id"]
         confidence = rule_rec["confidence"]
-        model_version = "Rule-based"
+        model_version = "Rule-based (Fallback)"
 
-    # 3️⃣ Xác định suggested_topic_id cuối cùng
+    # 5. Xác định suggested_topic_id cuối cùng
     if action == "advance":
-        # Tìm chủ đề tiếp theo nếu hành động là advance (từ cả ML và Rule-based)
-        next_topic_id = find_next_topic(lop, tuan, mon_hoc_name) # <--- TRUYỀN THAM SỐ MỚI
+        next_topic_id = find_next_topic(lop, tuan, mon_hoc_name)
         if next_topic_id:
             suggested_topic_id = next_topic_id
         else:
-            # Không tìm thấy chủ đề mới (Hoàn thành lộ trình môn học) -> Gợi ý ôn lại chủ đề hiện tại
             action = "review"
             suggested_topic_id = str(chu_de_id)
-            print(f"Hoàn thành lộ trình Môn '{mon_hoc_name}' cho lớp {lop}. Gợi ý ôn tập.")
+            print(f"Hoàn thành lộ trình Môn '{mon_hoc_name}' cho lớp {lop}.")
     elif action == "remediate" or action == "review":
-         # Nếu ML gợi ý remediate/review, cần lấy ID từ rule-based
-         if ml_rec:
-             rule_rec_fallback = recommend_rule_based_topic(normalized_score, current_topic_info)
-             suggested_topic_id = rule_rec_fallback["suggested_topic_id"]
-         # Nếu dùng rule-based thì suggested_topic_id đã có sẵn
-    else: # Trường hợp action không hợp lệ
+         # Nếu ML gợi ý (hoặc Fallback), chúng ta cần lấy ID từ Rule-based gốc
+         normalized_score_fallback = normalize_score(diem, max_score=10)
+         rule_rec_fallback = recommend_rule_based_topic(normalized_score_fallback, current_topic_info)
+         suggested_topic_id = rule_rec_fallback["suggested_topic_id"]
+    else:
         action = "review"
         suggested_topic_id = str(chu_de_id)
 
 
-    # 4️⃣ Ghi log AI
+    # 6. Ghi log AI
     try:
+        # Log input features (cả cũ và mới)
+        input_features_log = {
+            "diem_tong_thang_10": diem,
+            "lop": lop,
+            "tuan": tuan,
+            "mon_hoc": mon_hoc_name,
+            "features_df_v2": student_features_df.to_dict('records')[0] if student_features_df is not None else None
+        }
+        
         log_ai_recommendation(
             hoc_sinh_id=hoc_sinh_id,
-            input_features=student_features,
+            input_features=input_features_log,
             action=action,
-            chu_de_nguon=chu_de_id, # UUID string
-            chu_de_de_xuat=suggested_topic_id, # UUID string or None
-            bai_hoc_de_xuat=None, # Gợi ý cấp độ Chủ đề
+            chu_de_nguon=chu_de_id,
+            chu_de_de_xuat=suggested_topic_id,
             model_version=model_version,
             confidence=confidence
         )
     except Exception as log_err:
         print(f"Lỗi khi ghi log AI: {log_err}")
 
-    # 5️⃣ Tạo bản ghi lộ trình học (Thêm logging rõ ràng)
+    # 7. Tạo bản ghi lộ trình học (Giữ nguyên)
     if suggested_topic_id:
         try:
+            # (SỬA LỖI): Đảm bảo gọi hàm insert_learning_path đã được sửa lỗi (trả về None thay vì raise e)
             insert_learning_path(
                 hoc_sinh_id=hoc_sinh_id,
-                chu_de_id=suggested_topic_id, # UUID string
-                bai_hoc_id=None, # Gợi ý cấp độ Chủ đề
+                chu_de_id=suggested_topic_id,
+                bai_hoc_id=None,
                 loai_goi_y=action,
-                muc_do_de_xuat="biết", # Có thể dựa vào current_topic_info['muc_do']
                 diem_truoc_goi_y=diem
             )
-            print(f"✅ Đã chèn thành công gợi ý '{action}' cho Chủ đề ID: {suggested_topic_id}")
         except Exception as path_err:
-             print(f"❌ LỖI TRUY VẤN: Không thể tạo lộ trình học cho Chủ đề {suggested_topic_id}. Lỗi: {path_err}")
-             return None # Trả về None nếu insert thất bại
-
+             print(f"LỖI TRUY VẤN: Không thể tạo lộ trình học. Lỗi: {path_err}")
+             return None 
 
     return {
         "action": action,
-        "suggested_topic_id": suggested_topic_id, # UUID string or None
+        "suggested_topic_id": suggested_topic_id,
         "model": model_version,
         "confidence": confidence
     }
