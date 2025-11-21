@@ -1,5 +1,6 @@
 # ===============================================
-# ❓ Module Quản lý Câu hỏi - manage_questions.py (ĐÃ TÁI CẤU TRÚC HOÀN CHỈNH)
+# ❓ Module Quản lý Câu hỏi - manage_questions.py
+# (BẢN FINAL: Hỗ trợ Ảnh, TTS Async, Lọc Năm học & Duyệt Đóng góp)
 # ===============================================
 import streamlit as st
 import pandas as pd
@@ -7,75 +8,94 @@ import datetime
 import io
 import json
 import uuid
+import os # Thêm os để xử lý tên file
 from . import crud_utils
 from backend.supabase_client import supabase
 
+# Bucket để upload ảnh — ưu tiên lấy từ biến môi trường, nếu không có dùng giá trị mặc định
+IMAGE_BUCKET = os.environ.get("IMAGE_BUCKET", "question-images")
+# Nếu hệ thống của bạn dùng tên khác, đổi "question-images" thành tên bucket thực tế.
 
 @st.cache_data(ttl=60)
 def load_lesson_data_for_questions(active_chu_de_ids):
     """Tải dữ liệu bài học VÀ LỌC theo Chủ đề đang hoạt động."""
-    bai_hoc_df_all = crud_utils.load_data("bai_hoc")
+    try:
+        bai_hoc_df_all = crud_utils.load_data("bai_hoc")
 
-    # LỌC BÀI HỌC THEO CHỦ ĐỀ ĐANG HOẠT ĐỘNG
-    bai_hoc_df_filtered = bai_hoc_df_all[bai_hoc_df_all['chu_de_id'].astype(str).isin(active_chu_de_ids)].copy()
+        # LỌC BÀI HỌC THEO CHỦ ĐỀ ĐANG HOẠT ĐỘNG
+        bai_hoc_df_filtered = bai_hoc_df_all[bai_hoc_df_all['chu_de_id'].astype(str).isin(active_chu_de_ids)].copy()
 
-    bai_hoc_df_filtered = bai_hoc_df_filtered.sort_values(by=["chu_de_id", "thu_tu"]).reset_index(drop=True)
+        bai_hoc_df_filtered = bai_hoc_df_filtered.sort_values(by=["chu_de_id", "thu_tu"]).reset_index(drop=True)
 
-    bai_hoc_details = {
-        str(row['id']): {
-            "name": f"{row.get('thu_tu', 0)}. {row['ten_bai_hoc']}",
-            "chu_de_id": str(row.get('chu_de_id'))
-        }
-        for _, row in bai_hoc_df_filtered.iterrows()
-    } if not bai_hoc_df_filtered.empty else {}
-    return bai_hoc_details
+        bai_hoc_details = {
+            str(row['id']): {
+                "name": f"{row.get('thu_tu', 0)}. {row['ten_bai_hoc']}",
+                "chu_de_id": str(row.get('chu_de_id'))
+            }
+            for _, row in bai_hoc_df_filtered.iterrows()
+        } if not bai_hoc_df_filtered.empty else {}
+        return bai_hoc_details
+    except Exception:
+        return {}
 
 
-# === THAY ĐỔI CHỮ KÝ HÀM ===
 def render(mon_hoc_options):
     """
     Hiển thị giao diện quản lý Câu hỏi.
-    (Đã tái cấu trúc: Tự tải dữ liệu Chủ đề/Bài học)
     """
     st.subheader("❓ Quản lý Câu hỏi")
-    tab_list, tab_add, tab_import_q = st.tabs(["📝 Danh sách & Sửa/Xóa", "➕ Thêm mới", "📤 Import Excel"])
+
+    # TAB CẤU TRÚC
+    tab_list, tab_add, tab_import_q, tab_approve, tab_upload_tools = st.tabs([
+        "📝 Danh sách & Sửa/Xóa",
+        "➕ Thêm mới",
+        "📤 Import Excel",
+        "✅ Duyệt đóng góp",
+        "🛠️ Upload Ảnh & Lấy Link"  # <-- TAB MỚI
+    ])
+
     table_name = "cau_hoi"
 
-    # === TẢI DỮ LIỆU CẦN THIẾT (Tự cung cấp) ===
+    # === LẤY NĂM HỌC ĐANG CHỌN (Toàn cục) ===
     selected_year = st.session_state.get("global_selected_school_year")
     st.caption(f"Đang quản lý Ngân hàng câu hỏi liên quan đến Năm học: **{selected_year}**")
 
-    # 1. Lấy Khối (Grades) đang hoạt động trong năm đã chọn
+    # --- LOGIC LỌC CHỦ ĐỀ/BÀI HỌC THEO NĂM HỌC ---
     lop_df_all = crud_utils.load_data("lop_hoc")
     lop_df_filtered = lop_df_all[lop_df_all['nam_hoc'] == selected_year].copy()
     active_khoi_list = lop_df_filtered['khoi'].dropna().unique().tolist()
 
-    # 2. Lọc Chủ đề (Master Data - lọc theo Khối đang hoạt động)
-    chu_de_df_all = crud_utils.load_data("chu_de")  # Tải tất cả chủ đề
-    chu_de_df_filtered_by_year = chu_de_df_all[
-        chu_de_df_all['lop'].isin(active_khoi_list)].copy()  # Đây là 'chu_de_df' đã sửa lỗi
+    # 1. Lọc Chủ đề
+    chu_de_df_all = crud_utils.load_data("chu_de")
+    chu_de_df_filtered_by_year = chu_de_df_all[chu_de_df_all['lop'].isin(active_khoi_list)].copy()
     active_chu_de_ids = chu_de_df_filtered_by_year['id'].astype(str).tolist()
 
-    # 3. Tái tạo map Chủ đề
+    # 2. Tái tạo map Chủ đề
     chu_de_options_active = {
         f"{row['ten_chu_de']} (L{row['lop']}-T{row['tuan']})": str(row['id'])
         for _, row in chu_de_df_filtered_by_year.iterrows()
     }
 
-    # 4. Lọc Bài học
+    # 3. Lọc Bài học
     bai_hoc_details_active = load_lesson_data_for_questions(active_chu_de_ids)
     active_bai_hoc_ids = list(bai_hoc_details_active.keys())
-    # ---------------------------------------------
 
-    # Lọc Dữ liệu Câu hỏi (Bảng chính)
+    # Lọc Dữ liệu Câu hỏi (Bảng chính - CHỈ LẤY CÂU ĐÃ DUYỆT HOẶC CỦA ADMIN)
     df_quiz_original_all = crud_utils.load_data(table_name)
+
+    # Lọc: Thuộc chủ đề active VÀ (đã duyệt HOẶC dữ liệu cũ chưa có cột duyệt)
     df_quiz_original = df_quiz_original_all[
-        df_quiz_original_all['chu_de_id'].astype(str).isin(active_chu_de_ids)].copy()
+        df_quiz_original_all['chu_de_id'].astype(str).isin(active_chu_de_ids) &
+        (df_quiz_original_all['trang_thai_duyet'].isin(['approved', None, 'NaN']) | df_quiz_original_all[
+            'trang_thai_duyet'].isna())
+        ].copy()
 
     LOAI_CAU_HOI_OPTIONS = ["mot_lua_chon", "nhieu_lua_chon", "dien_khuyet"]
     MUC_DO_OPTIONS = ["biết", "hiểu", "vận dụng"]
 
-    # --- Tab Thêm mới (Đã sửa logic lọc 3 bước) ---
+    # =======================================================
+    # TAB 1: THÊM MỚI
+    # =======================================================
     with tab_add:
         st.markdown("### ❓ Thêm câu hỏi mới")
 
@@ -84,20 +104,11 @@ def render(mon_hoc_options):
                 f"⚠️ Không tìm thấy Chủ đề nào thuộc Khối lớp đang hoạt động trong Năm học: **{selected_year}**.")
             st.stop()
 
-        # 1. Chọn Môn học
-        if not mon_hoc_options:
-            st.warning("⚠️ Chưa có Môn học nào. Vui lòng thêm Môn học trước.");
-            st.stop()
+        # 1. Chọn Môn
+        selected_mon_hoc_name = st.selectbox("**1. Chọn Môn học***:", list(mon_hoc_options.keys()),
+                                             key="q_add_monhoc_select", index=None)
 
-        selected_mon_hoc_name = st.selectbox(
-            "**1. Chọn Môn học***:",
-            list(mon_hoc_options.keys()),
-            key="q_add_monhoc_select",
-            index=None,
-            placeholder="Chọn môn học..."
-        )
-
-        # 2. Lọc Chủ đề theo Môn học (Dùng map đã lọc theo năm)
+        # 2. Chọn Chủ đề (Lọc theo Môn)
         filtered_chu_de_options_map = {}
         if selected_mon_hoc_name:
             filtered_chu_de_options_map = {
@@ -114,12 +125,11 @@ def render(mon_hoc_options):
             list(filtered_chu_de_options_map.keys()),
             key="q_add_cd_select_main",
             index=None,
-            placeholder="Chọn chủ đề..." if selected_mon_hoc_name else "Vui lòng chọn Môn học trước",
             disabled=(not selected_mon_hoc_name or not filtered_chu_de_options_map)
         )
         selected_chu_de_id = filtered_chu_de_options_map.get(selected_chu_de_name)
 
-        # 3. Lọc Bài học theo Chủ đề (Dùng map đã lọc theo năm)
+        # 3. Chọn Bài học (Lọc theo Chủ đề)
         filtered_lesson_options = {}
         if selected_chu_de_id:
             filtered_lesson_options = {
@@ -129,8 +139,7 @@ def render(mon_hoc_options):
             }
 
         lesson_options_with_none = {"(Không thuộc bài học cụ thể / Câu hỏi chung)": "NONE_VALUE"}
-        filtered_lesson_options_sorted = dict(sorted(filtered_lesson_options.items()))
-        lesson_options_with_none.update(filtered_lesson_options_sorted)
+        lesson_options_with_none.update(dict(sorted(filtered_lesson_options.items())))
 
         selected_lesson_name = st.selectbox(
             "**3. Chọn Bài học (Tùy chọn)**:",
@@ -140,20 +149,29 @@ def render(mon_hoc_options):
             disabled=(not selected_chu_de_id)
         )
         selected_lesson_id = lesson_options_with_none.get(selected_lesson_name)
-        if selected_lesson_id == "NONE_VALUE":
-            selected_lesson_id = None
+        if selected_lesson_id == "NONE_VALUE": selected_lesson_id = None
 
-        # 4. Form nhập liệu
         if selected_chu_de_id:
             with st.form("add_question_form", clear_on_submit=True):
-                st.markdown("**4. Nhập nội dung câu hỏi**:")
-                loai = st.selectbox("Loại câu hỏi *", LOAI_CAU_HOI_OPTIONS, key="q_loai", index=0)
-                muc_do = st.selectbox("Mức độ *", MUC_DO_OPTIONS, key="q_muc_do")
-                noi_dung = st.text_area("Nội dung *", key="q_noi_dung")
-                dap_an_dung_raw = st.text_area("Đáp án đúng *", key="q_dung_raw")
+                st.markdown("**4. Nội dung chi tiết**")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    loai = st.selectbox("Loại câu hỏi *", LOAI_CAU_HOI_OPTIONS, key="q_loai")
+                with col_b:
+                    muc_do = st.selectbox("Mức độ *", MUC_DO_OPTIONS, key="q_muc_do")
+
+                noi_dung = st.text_area("Nội dung (Chữ) *", key="q_noi_dung", height=100)
+                hinh_anh_url = st.text_input("Link Ảnh minh họa (Tùy chọn)", key="q_hinh_anh",
+                                             help="Dán URL ảnh công khai")
+
+                st.markdown("**Đáp án**")
+                dap_an_dung_raw = st.text_area("Đáp án ĐÚNG * (Mỗi dòng 1 đáp án / URL ảnh)", key="q_dung_raw",
+                                               height=80)
                 dap_an_khac_raw = ""
                 if loai != "dien_khuyet":
-                    dap_an_khac_raw = st.text_area("Đáp án sai / Các lựa chọn khác", key="q_khac_raw")
+                    dap_an_khac_raw = st.text_area("Đáp án SAI (Mỗi dòng 1 đáp án / URL ảnh)", key="q_khac_raw",
+                                                   height=80)
+
                 diem_so = st.number_input("Điểm", min_value=0, value=1, key="q_diem")
 
                 submitted = st.form_submit_button("➕ Thêm câu hỏi", width='stretch')
@@ -163,118 +181,110 @@ def render(mon_hoc_options):
                     dap_an_khac = [s.strip() for s in dap_an_khac_raw.split("\n") if
                                    s.strip()] if loai != "dien_khuyet" else []
 
-                    if not noi_dung:
-                        st.error("Nội dung câu hỏi không được trống.")
-                    # ... (các validation khác) ...
+                    if not noi_dung and not hinh_anh_url:
+                        st.error("Phải có ít nhất Nội dung (Chữ) hoặc Hình ảnh minh họa.")
+                    elif (loai == "mot_lua_chon" and len(dap_an_dung) != 1):
+                        st.error("Câu 'Một lựa chọn' cần đúng 1 đáp án đúng.")
+                    elif not dap_an_dung:
+                        st.error("Phải có ít nhất 1 đáp án đúng.")
                     else:
                         try:
                             new_question_id = str(uuid.uuid4())
-
                             insert_payload = {
                                 "id": new_question_id,
                                 "chu_de_id": selected_chu_de_id,
                                 "bai_hoc_id": selected_lesson_id,
                                 "loai_cau_hoi": loai,
                                 "noi_dung": noi_dung,
+                                "hinh_anh_url": hinh_anh_url if hinh_anh_url else None,
                                 "dap_an_dung": dap_an_dung,
                                 "dap_an_khac": dap_an_khac,
                                 "muc_do": muc_do,
-                                "diem_so": diem_so
+                                "diem_so": diem_so,
+                                "trang_thai_duyet": "approved"  # Admin thêm thì tự duyệt
                             }
                             supabase.table(table_name).insert(insert_payload).execute()
 
-                            task_payload = {
-                                "question_id": new_question_id,
-                                "noi_dung": noi_dung
-                            }
-                            supabase.table("task_queue").insert({
-                                "task_type": "tts_generation",
-                                "status": "pending",
-                                "payload": task_payload
-                            }).execute()
+                            # Queue TTS
+                            if noi_dung:
+                                supabase.table("task_queue").insert({
+                                    "task_type": "tts_generation",
+                                    "status": "pending",
+                                    "payload": {"question_id": new_question_id, "noi_dung": noi_dung}
+                                }).execute()
+                                st.success(f"Đã thêm câu hỏi! TTS đang xử lý.")
+                            else:
+                                st.success(f"Đã thêm câu hỏi (Không có TTS).")
 
-                            st.success(f"Đã thêm câu hỏi! Âm thanh TTS đang được xử lý trong nền.")
                             crud_utils.clear_all_cached_data()
-
                         except Exception as e:
-                            st.error(f"Lỗi khi thêm câu hỏi hoặc xếp hàng đợi TTS: {e}")
-        else:
-            st.info("Vui lòng chọn Môn học và Chủ đề để bắt đầu nhập câu hỏi.")
+                            st.error(f"Lỗi thêm câu hỏi: {e}")
 
-    # --- Tab Danh sách & Sửa/Xóa ---
+    # =======================================================
+    # TAB 2: DANH SÁCH & SỬA/XÓA
+    # =======================================================
     with tab_list:
-
         if df_quiz_original.empty:
             st.warning(f"Không tìm thấy Câu hỏi nào thuộc Khối lớp đang hoạt động trong Năm học: **{selected_year}**.")
             st.stop()
 
-        # 1. Chuẩn bị DataFrame (Merge với chu_de_df_filtered_by_year)
+        # Chuẩn bị DataFrame hiển thị
         df_quiz_display = df_quiz_original.copy()
-
         df_quiz_display['chu_de_id_str'] = df_quiz_display['chu_de_id'].astype(str)
         chu_de_df_filtered_by_year['chu_de_id_str'] = chu_de_df_filtered_by_year['id'].astype(str)
 
-        bai_hoc_id_map_quiz = {id_: details["name"] for id_, details in bai_hoc_details_active.items()}
-        df_quiz_display['Bài học'] = df_quiz_display['bai_hoc_id'].astype(str).map(bai_hoc_id_map_quiz).fillna(
-            "(Chung)")
-
+        # Merge lấy tên
         df_quiz_display = pd.merge(
             df_quiz_display,
             chu_de_df_filtered_by_year[['chu_de_id_str', 'ten_chu_de', 'mon_hoc', 'lop']],
             on='chu_de_id_str',
             how='left'
         )
-        df_quiz_display = df_quiz_display.rename(columns={
-            "lop": "Khối",
-            "mon_hoc": "Môn học",
-            "ten_chu_de": "Chủ đề"
-        })
-
+        df_quiz_display = df_quiz_display.rename(columns={"lop": "Khối", "mon_hoc": "Môn học", "ten_chu_de": "Chủ đề"})
         df_quiz_display = df_quiz_display.sort_values(by=["Khối", "Môn học", "Chủ đề", "id"]).reset_index(drop=True)
 
-        # 2. Tạo Bộ lọc
+        # Bộ lọc
         st.markdown("##### 🔍 Lọc danh sách")
         col_f1, col_f2, col_f3 = st.columns(3)
-        # ... (Logic lọc Khối, Môn, Chủ đề giữ nguyên, sử dụng df_quiz_display) ...
+
+        # Lọc Khối
         with col_f1:
             khoi_list_raw = df_quiz_display['Khối'].dropna().unique()
             khoi_list = ["Tất cả"] + sorted([int(k) for k in khoi_list_raw])
             selected_khoi = st.selectbox("Lọc theo Khối:", khoi_list, key="q_filter_khoi", index=0)
+
         df_filtered_by_khoi = df_quiz_display
         if selected_khoi != "Tất cả":
             df_filtered_by_khoi = df_quiz_display[df_quiz_display['Khối'] == selected_khoi]
+
+        # Lọc Môn
         with col_f2:
             mon_hoc_list = ["Tất cả"] + sorted(list(df_filtered_by_khoi['Môn học'].dropna().unique()))
             selected_mon_hoc = st.selectbox("Lọc theo Môn học:", mon_hoc_list, key="q_filter_monhoc", index=0)
+
+        # Lọc Chủ đề
         with col_f3:
-            chu_de_list = ["Tất cả"]
             df_filtered_by_mon = df_filtered_by_khoi
             if selected_mon_hoc != "Tất cả":
                 df_filtered_by_mon = df_filtered_by_khoi[df_filtered_by_khoi['Môn học'] == selected_mon_hoc]
+            chu_de_list = ["Tất cả"]
             chu_de_list.extend(sorted(list(df_filtered_by_mon['Chủ đề'].dropna().unique())))
             selected_chu_de = st.selectbox("Lọc theo Chủ đề:", chu_de_list, key="q_filter_chude", index=0)
+
         df_to_show = df_filtered_by_mon.copy()
         if selected_chu_de != "Tất cả":
             df_to_show = df_to_show[df_to_show['Chủ đề'] == selected_chu_de]
+
         st.markdown("---")
 
         if not df_to_show.empty:
-            # ... (Hiển thị DataFrame) ...
-            try:
-                df_to_show['dap_an_dung_display'] = df_to_show['dap_an_dung'].apply(
-                    lambda x: ', '.join(map(str, x)) if isinstance(x, list) else x)
-                df_to_show['dap_an_khac_display'] = df_to_show['dap_an_khac'].apply(
-                    lambda x: ', '.join(map(str, x)) if isinstance(x, list) and x else '')
-            except:
-                pass
-            cols_display_q = ['id', 'noi_dung', 'Khối', 'Môn học', 'Chủ đề', 'Bài học', 'loai_cau_hoi', 'muc_do',
-                              'diem_so', 'dap_an_dung_display', 'dap_an_khac_display', 'audio_url']
+            cols_display_q = ['id', 'noi_dung', 'hinh_anh_url', 'Khối', 'Môn học', 'Chủ đề', 'muc_do', 'loai_cau_hoi']
             cols_exist = [col for col in cols_display_q if col in df_to_show.columns]
-            st.info("Nhấp vào một hàng trong bảng dưới đây để Sửa hoặc Xóa.")
+
+            st.info("Nhấp vào một hàng để Sửa/Xóa.")
             gb = st.dataframe(
-                df_to_show[cols_exist].rename(columns={"loai_cau_hoi": "Loại", "muc_do": "Mức độ", "diem_so": "Điểm",
-                                                       "dap_an_dung_display": "Đ.A Đúng",
-                                                       "dap_an_khac_display": "Đ.A Khác", "audio_url": "Link Audio"}),
+                df_to_show[cols_exist].rename(
+                    columns={"hinh_anh_url": "Ảnh", "loai_cau_hoi": "Loại", "muc_do": "Mức độ"}),
                 key="quiz_df_select",
                 hide_index=True,
                 width='stretch',
@@ -283,181 +293,111 @@ def render(mon_hoc_options):
             )
             selected_rows = gb.selection.rows
             selected_item_original = None
+
             if selected_rows:
                 original_id = df_to_show.iloc[selected_rows[0]]['id']
                 st.session_state['quiz_selected_item_id'] = original_id
+
             if 'quiz_selected_item_id' in st.session_state:
                 selected_id = st.session_state['quiz_selected_item_id']
                 original_item_df = df_quiz_original_all[df_quiz_original_all['id'] == selected_id]
                 if not original_item_df.empty:
                     selected_item_original = original_item_df.iloc[0].to_dict()
 
-            # 4. Form Sửa/Xóa
+            # Form Sửa/Xóa
             if selected_item_original:
+                is_active = selected_item_original.get('chu_de_id') in active_chu_de_ids
+                disabled_editing = not is_active
+                if not is_active: st.warning("Câu hỏi thuộc chủ đề không hoạt động trong năm nay.")
 
-                is_active_question = selected_item_original.get('chu_de_id') in active_chu_de_ids
-                disabled_editing = not is_active_question
-
-                if not is_active_question:
-                    st.warning(f"Câu hỏi này không thuộc Chủ đề đang hoạt động trong Năm học **{selected_year}**.")
-
-                with st.expander("📝 Sửa/Xóa Câu hỏi đã chọn", expanded=True):
+                with st.expander("📝 Sửa/Xóa Câu hỏi", expanded=True):
                     with st.form("edit_question_form"):
-                        st.text(f"ID Câu hỏi: {selected_item_original['id']}")
+                        st.text(f"ID: {selected_item_original['id']}")
 
-                        # Dùng map CHỦ ĐỀ ĐANG HOẠT ĐỘNG
-                        chu_de_opts_local = chu_de_options_active
-                        current_cd_id = str(selected_item_original.get("chu_de_id", ""))
+                        # Các trường nội dung
+                        noi_dung_edit = st.text_area("Nội dung", value=selected_item_original.get("noi_dung", ""),
+                                                     disabled=disabled_editing)
+                        current_img = selected_item_original.get("hinh_anh_url", "")
+                        if current_img: st.image(current_img, width=200)
+                        hinh_anh_url_edit = st.text_input("Link Ảnh", value=current_img or "",
+                                                          disabled=disabled_editing)
 
-                        # Tìm tên hiển thị đầy đủ của chủ đề (ví dụ: "Tên (L1-T1)")
-                        current_cd_name = next(
-                            (name for name, id_ in chu_de_options.items() if id_ == current_cd_id),
-                            None)  # Dùng map TẤT CẢ để tìm tên
-
-                        cd_keys_list = list(chu_de_opts_local.keys())  # Dùng map ACTIVE cho selectbox
-                        cd_idx = cd_keys_list.index(
-                            current_cd_name) if current_cd_name in cd_keys_list else 0
-
-                        chu_de_ten_edit = st.selectbox("Chủ đề *", cd_keys_list, index=cd_idx,
-                                                       key="q_edit_cd", disabled=disabled_editing)
-                        selected_chu_de_id_edit = chu_de_opts_local.get(chu_de_ten_edit)
-
-                        # Lọc Bài học (Dùng map ACTIVE)
-                        filtered_lesson_options_edit = {}
-                        if selected_chu_de_id_edit:
-                            filtered_lesson_options_edit = {details["name"]: bh_id for bh_id, details in
-                                                            bai_hoc_details_active.items() if
-                                                            details["chu_de_id"] == selected_chu_de_id_edit}
-                        lesson_options_with_none_edit = {"(Không thuộc bài học cụ thể / Câu hỏi chung)": "NONE_VALUE"}
-                        filtered_lesson_options_sorted_edit = dict(sorted(filtered_lesson_options_edit.items()))
-                        lesson_options_with_none_edit.update(filtered_lesson_options_sorted_edit)
-
-                        current_bh_id = str(selected_item_original.get("bai_hoc_id", ""))
-                        current_bh_name = bai_hoc_details_active.get(current_bh_id, {}).get("name",
-                                                                                            "(Không thuộc bài học cụ thể / Câu hỏi chung)")
-
-                        bh_idx = list(lesson_options_with_none_edit.keys()).index(
-                            current_bh_name) if current_bh_name in lesson_options_with_none_edit else 0
-
-                        bai_hoc_ten_edit = st.selectbox("Bài học (Tùy chọn)",
-                                                        list(lesson_options_with_none_edit.keys()), index=bh_idx,
-                                                        key="q_edit_bh", disabled=disabled_editing)
-                        selected_lesson_id_edit = lesson_options_with_none_edit.get(bai_hoc_ten_edit)
-                        if selected_lesson_id_edit == "NONE_VALUE": selected_lesson_id_edit = None
-
-                        # ... (Các trường còn lại của form) ...
-                        loai_val = selected_item_original.get("loai_cau_hoi", "mot_lua_chon")
-                        loai_idx = LOAI_CAU_HOI_OPTIONS.index(loai_val) if loai_val in LOAI_CAU_HOI_OPTIONS else 0
-                        loai_edit = st.selectbox("Loại câu hỏi *:", LOAI_CAU_HOI_OPTIONS, index=loai_idx,
-                                                 key="q_edit_loai", disabled=disabled_editing)
-                        md_val = selected_item_original.get("muc_do", "biết")
-                        md_idx = MUC_DO_OPTIONS.index(md_val) if md_val in MUC_DO_OPTIONS else 0
-                        muc_do_edit = st.selectbox("Mức độ *:", MUC_DO_OPTIONS, index=md_idx, key="q_edit_md",
-                                                   disabled=disabled_editing)
-                        noi_dung_edit = st.text_area("Nội dung *", value=selected_item_original.get("noi_dung", ""),
-                                                     key="q_edit_nd", disabled=disabled_editing)
                         dap_an_dung_list = selected_item_original.get("dap_an_dung", [])
-                        dap_an_dung_raw_edit = st.text_area("Đáp án đúng *",
-                                                            value="\n".join(map(str, dap_an_dung_list)),
-                                                            key="q_edit_dung", disabled=disabled_editing)
+                        dap_an_dung_raw_edit = st.text_area("Đáp án ĐÚNG", value="\n".join(map(str, dap_an_dung_list)),
+                                                            disabled=disabled_editing)
+
                         dap_an_khac_list = selected_item_original.get("dap_an_khac", [])
-                        dap_an_khac_raw_edit = st.text_area("Đáp án sai / Lựa chọn khác",
-                                                            value="\n".join(map(str, dap_an_khac_list)),
-                                                            key="q_edit_khac", disabled=disabled_editing)
-                        diem_so_edit = st.number_input("Điểm", min_value=0,
-                                                       value=selected_item_original.get("diem_so", 1),
-                                                       key="q_edit_diem", disabled=disabled_editing)
+                        dap_an_khac_raw_edit = st.text_area("Đáp án SAI", value="\n".join(map(str, dap_an_khac_list)),
+                                                            disabled=disabled_editing)
 
-                        if selected_item_original.get("audio_url"):
-                            st.caption(f"Đã có file âm thanh: [Nghe thử]({selected_item_original.get('audio_url')})")
-                        else:
-                            st.caption("Chưa có file âm thanh (Hoặc đang chờ xử lý).")
+                        md_idx = MUC_DO_OPTIONS.index(selected_item_original.get("muc_do", "biết"))
+                        muc_do_edit = st.selectbox("Mức độ", MUC_DO_OPTIONS, index=md_idx, disabled=disabled_editing)
 
-                        regenerate_tts = st.checkbox("Tạo lại file âm thanh (nếu nội dung thay đổi)",
-                                                     key="q_edit_tts_regen", disabled=disabled_editing)
+                        diem_so_edit = st.number_input("Điểm", value=selected_item_original.get("diem_so", 1),
+                                                       disabled=disabled_editing)
 
-                        col_update, col_delete, col_clear = st.columns(3)
-                        if col_update.form_submit_button("💾 Lưu thay đổi", width='stretch', disabled=disabled_editing):
-                            # ... (Validation) ...
-                            dap_an_dung_new = [s.strip() for s in dap_an_dung_raw_edit.split("\n") if s.strip()]
-                            dap_an_khac_new = [s.strip() for s in dap_an_khac_raw_edit.split("\n") if
-                                               s.strip()] if loai_edit != "dien_khuyet" else []
-                            if not noi_dung_edit:
-                                st.error("Nội dung không được trống.")
-                            # ...
-                            else:
-                                if not selected_chu_de_id_edit:
-                                    st.error("Chủ đề đã chọn không hợp lệ.")
-                                else:
-                                    update_data = {
-                                        "chu_de_id": selected_chu_de_id_edit,
-                                        "bai_hoc_id": selected_lesson_id_edit,
-                                        "loai_cau_hoi": loai_edit,
-                                        "noi_dung": noi_dung_edit,
-                                        "dap_an_dung": dap_an_dung_new,
-                                        "dap_an_khac": dap_an_khac_new,
-                                        "muc_do": muc_do_edit,
-                                        "diem_so": diem_so_edit
-                                    }
+                        regen_tts = st.checkbox("Tạo lại Audio", disabled=disabled_editing)
 
-                                    try:
-                                        supabase.table(table_name).update(update_data).eq("id", selected_item_original[
-                                            'id']).execute()
+                        c1, c2, c3 = st.columns(3)
+                        if c1.form_submit_button("💾 Lưu", width='stretch', disabled=disabled_editing):
+                            d_dung = [s.strip() for s in dap_an_dung_raw_edit.split("\n") if s.strip()]
+                            d_sai = [s.strip() for s in dap_an_khac_raw_edit.split("\n") if s.strip()]
 
-                                        if regenerate_tts:
-                                            st.info("Đang xếp hàng đợi tạo lại file âm thanh...")
-                                            task_payload = {
-                                                "question_id": selected_item_original['id'],
-                                                "noi_dung": noi_dung_edit
-                                            }
-                                            supabase.table("task_queue").insert({
-                                                "task_type": "tts_generation",
-                                                "status": "pending",
-                                                "payload": task_payload
-                                            }).execute()
-                                            st.success("Đã gửi yêu cầu tạo lại âm thanh!")
-
-                                        st.success("Cập nhật câu hỏi thành công!")
-                                        crud_utils.clear_cache_and_rerun()
-                                    except Exception as e:
-                                        st.error(f"Lỗi khi cập nhật câu hỏi: {e}")
-
-                        if col_delete.form_submit_button("❌ Xóa câu hỏi này", width='stretch',
-                                                         disabled=disabled_editing):
+                            update_data = {
+                                "noi_dung": noi_dung_edit,
+                                "hinh_anh_url": hinh_anh_url_edit if hinh_anh_url_edit else None,
+                                "dap_an_dung": d_dung,
+                                "dap_an_khac": d_sai,
+                                "muc_do": muc_do_edit,
+                                "diem_so": diem_so_edit
+                            }
                             try:
-                                # (TODO: Xóa file audio khỏi Storage và task_queue nếu cần)
-                                supabase.table(table_name).delete().eq("id", selected_item_original['id']).execute()
-                                st.warning(f"Đã xóa câu hỏi ID: {selected_item_original['id']}")
+                                supabase.table(table_name).update(update_data).eq("id", selected_item_original[
+                                    'id']).execute()
+                                if regen_tts and noi_dung_edit:
+                                    supabase.table("task_queue").insert(
+                                        {"task_type": "tts_generation", "status": "pending",
+                                         "payload": {"question_id": selected_item_original['id'],
+                                                     "noi_dung": noi_dung_edit}}).execute()
+                                    st.success("Đã cập nhật & Gửi yêu cầu Audio!")
+                                else:
+                                    st.success("Cập nhật thành công!")
                                 crud_utils.clear_cache_and_rerun()
                             except Exception as e:
-                                st.error(f"Lỗi khi xóa: {e}.")
-                        if col_clear.form_submit_button("Hủy chọn", width='stretch'):
-                            if 'quiz_selected_item_id' in st.session_state: del st.session_state[
-                                'quiz_selected_item_id']
-                            st.rerun()
-        else:
-            if df_quiz_original_all.empty:
-                st.info("Chưa có câu hỏi nào trong hệ thống.")
-            else:
-                st.info("Không tìm thấy câu hỏi nào phù hợp với bộ lọc.")
+                                st.error(f"Lỗi: {e}")
 
-    # --- Tab Import Excel ---
+                        if c2.form_submit_button("❌ Xóa", width='stretch', disabled=disabled_editing):
+                            try:
+                                supabase.table(table_name).delete().eq("id", selected_item_original['id']).execute()
+                                st.warning("Đã xóa!");
+                                crud_utils.clear_cache_and_rerun()
+                            except Exception as e:
+                                st.error(f"Lỗi xóa: {e}")
+
+                        if c3.form_submit_button("Hủy", width='stretch'):
+                            del st.session_state['quiz_selected_item_id'];
+                            st.rerun()
+
+    # =======================================================
+    # TAB 3: IMPORT EXCEL
+    # =======================================================
     with tab_import_q:
         st.markdown("### 📤 Import câu hỏi từ Excel")
         st.warning(f"Việc import sẽ áp dụng cho Chủ đề/Bài học đang hoạt động trong Năm học: **{selected_year}**")
+
         sample_data_q = {
             'chu_de_id': ['UUID CỦA CHỦ ĐỀ'],
             'bai_hoc_id': ['UUID BÀI HỌC (Tùy chọn)'],
             'loai_cau_hoi': ['mot_lua_chon'],
-            'noi_dung': ['1+1=?'],
-            'dap_an_dung': ['2'],
-            'dap_an_khac': ['1;3;4'],
+            'noi_dung': ['Nội dung câu hỏi...'],
+            'hinh_anh_url': ['https://link-anh.jpg'],
+            'dap_an_dung': ['Đáp án đúng'],
+            'dap_an_khac': ['Đáp án sai 1; Đáp án sai 2'],
             'muc_do': ['biết'],
             'diem_so': [1]
         }
         crud_utils.create_excel_download(pd.DataFrame(sample_data_q), "mau_import_cau_hoi.xlsx",
                                          sheet_name='DanhSachCauHoi')
-        st.caption("Cột 'chu_de_id' và 'bai_hoc_id' (nếu có) phải thuộc Năm học đang xem.")
 
         uploaded = st.file_uploader("Chọn file Excel Câu hỏi", type=["xlsx"], key="quiz_upload")
         if uploaded:
@@ -466,85 +406,190 @@ def render(mon_hoc_options):
                 st.dataframe(df_upload.head())
 
                 valid_chu_de_ids = active_chu_de_ids
-                valid_bai_hoc_ids = active_bai_hoc_ids
-
                 if not valid_chu_de_ids:
-                    st.error(f"Chưa có chủ đề nào hoạt động trong Năm học {selected_year} để import câu hỏi.")
+                    st.error("Chưa có chủ đề nào hoạt động để import.")
                 elif st.button("🚀 Import Câu hỏi", width='stretch'):
                     count = 0;
                     errors = []
-
-                    bai_hoc_to_chu_de_map_active = {id_: details["chu_de_id"] for id_, details in
-                                                    bai_hoc_details_active.items()}
-                    tasks_to_queue = []  # Lưu các task TTS
-
-                    with st.spinner("Đang import câu hỏi và xếp hàng đợi TTS..."):
+                    with st.spinner("Đang import..."):
                         for index, row in df_upload.iterrows():
                             try:
                                 chu_de_id_str = str(row["chu_de_id"]).strip()
-                                if chu_de_id_str not in valid_chu_de_ids: raise ValueError(
-                                    f"Chu de ID '{chu_de_id_str}' không tồn tại hoặc không thuộc Năm học {selected_year}.")
+                                if chu_de_id_str not in valid_chu_de_ids: raise ValueError("Chủ đề không hợp lệ.")
 
-                                bai_hoc_id_str = str(row.get("bai_hoc_id", "")).strip() if pd.notna(
-                                    row.get("bai_hoc_id")) else None
+                                noi_dung = str(row.get("noi_dung", "")).strip()
+                                hinh_anh_url = str(row.get("hinh_anh_url", "")).strip() if pd.notna(
+                                    row.get("hinh_anh_url")) else None
+                                if not noi_dung and not hinh_anh_url: raise ValueError("Thiếu nội dung/hình ảnh.")
 
-                                if bai_hoc_id_str and bai_hoc_id_str not in valid_bai_hoc_ids: raise ValueError(
-                                    f"Bai hoc ID '{bai_hoc_id_str}' không tồn tại hoặc không thuộc Năm học {selected_year}.")
-
-                                if bai_hoc_id_str and bai_hoc_to_chu_de_map_active.get(bai_hoc_id_str) != chu_de_id_str:
-                                    raise ValueError(
-                                        f"Bai hoc ID '{bai_hoc_id_str}' không thuộc Chu de ID '{chu_de_id_str}'.")
-
-                                # ... (validation các cột còn lại) ...
-                                dap_an_dung = [s.strip() for s in str(row.get("dap_an_dung", "")).split(";") if
-                                               s.strip()]
-                                dap_an_khac = [s.strip() for s in str(row.get("dap_an_khac", "")).split(";") if
-                                               s.strip()]
-                                loai_cau_hoi = str(row.get("loai_cau_hoi", "mot_lua_chon")).strip().lower()
-                                if loai_cau_hoi not in LOAI_CAU_HOI_OPTIONS: raise ValueError(
-                                    f"Loại câu hỏi '{loai_cau_hoi}' không hợp lệ.")
-                                noi_dung = str(row["noi_dung"]).strip()
-                                muc_do = str(row.get("muc_do", "biết")).strip().lower()
-                                if muc_do not in MUC_DO_OPTIONS: raise ValueError(f"Mức độ '{muc_do}' không hợp lệ.")
-                                diem_so_val = pd.to_numeric(row.get("diem_so", 1), errors='coerce')
-                                if pd.isna(diem_so_val) or diem_so_val < 0: raise ValueError("Điểm số không hợp lệ.")
-                                diem_so = int(diem_so_val)
-                                if not noi_dung: raise ValueError("Nội dung trống.")
-                                # ...
-
-                                new_question_id = str(uuid.uuid4())
-                                # audio_url = crud_utils.generate_and_upload_tts(noi_dung, new_question_id) # (ĐÃ XÓA)
-
+                                new_id = str(uuid.uuid4())
                                 insert_data = {
-                                    "id": new_question_id,
-                                    "chu_de_id": chu_de_id_str, "bai_hoc_id": bai_hoc_id_str,
-                                    "loai_cau_hoi": loai_cau_hoi,
-                                    "noi_dung": noi_dung, "dap_an_dung": dap_an_dung, "dap_an_khac": dap_an_khac,
-                                    "muc_do": muc_do, "diem_so": diem_so
-                                    # Không có audio_url
+                                    "id": new_id,
+                                    "chu_de_id": chu_de_id_str,
+                                    "bai_hoc_id": str(row.get("bai_hoc_id", "")).strip() or None,
+                                    "loai_cau_hoi": str(row.get("loai_cau_hoi", "mot_lua_chon")).strip().lower(),
+                                    "noi_dung": noi_dung,
+                                    "hinh_anh_url": hinh_anh_url,
+                                    "dap_an_dung": [s.strip() for s in str(row.get("dap_an_dung", "")).split(";") if
+                                                    s.strip()],
+                                    "dap_an_khac": [s.strip() for s in str(row.get("dap_an_khac", "")).split(";") if
+                                                    s.strip()],
+                                    "muc_do": str(row.get("muc_do", "biết")).strip().lower(),
+                                    "diem_so": int(pd.to_numeric(row.get("diem_so", 1), errors='coerce')),
+                                    "trang_thai_duyet": "approved"
                                 }
-
                                 supabase.table(table_name).insert(insert_data).execute()
 
-                                tasks_to_queue.append({
-                                    "task_type": "tts_generation",
-                                    "status": "pending",
-                                    "payload": {"question_id": new_question_id, "noi_dung": noi_dung}
-                                })
-
+                                if noi_dung:
+                                    supabase.table("task_queue").insert(
+                                        {"task_type": "tts_generation", "status": "pending",
+                                         "payload": {"question_id": new_id, "noi_dung": noi_dung}}).execute()
                                 count += 1
                             except Exception as e:
                                 errors.append(f"Dòng {index + 2}: {e}")
-
-                        if tasks_to_queue:
-                            try:
-                                supabase.table("task_queue").insert(tasks_to_queue).execute()
-                            except Exception as e:
-                                errors.append(f"Lỗi khi xếp hàng đợi TTS: {e}")
-
-                    st.success(
-                        f"✅ Import thành công {count} câu hỏi. Đã xếp hàng đợi {len(tasks_to_queue)} file âm thanh để xử lý.")
+                    st.success(f"✅ Import thành công {count} câu hỏi.");
                     crud_utils.clear_all_cached_data()
-                    if errors: st.error("Các dòng sau bị lỗi:"); st.code("\n".join(errors))
+                    if errors: st.error("Lỗi:"); st.code("\n".join(errors))
             except Exception as e:
-                st.error(f"Lỗi đọc file câu hỏi: {e}")
+                st.error(f"Lỗi đọc file: {e}")
+
+    # =======================================================
+    # TAB 4: DUYỆT ĐÓNG GÓP (HOÀN THIỆN)
+    # =======================================================
+    with tab_approve:
+        st.markdown("### ✅ Duyệt câu hỏi đóng góp từ Giáo viên")
+
+        try:
+            pending_res = supabase.table("cau_hoi").select(
+                "*, giao_vien(ho_ten), chu_de(ten_chu_de, mon_hoc, lop)"
+            ).eq("trang_thai_duyet", "pending").order("created_at", desc=True).execute()
+            pending_questions = pending_res.data or []
+        except Exception:
+            pending_questions = []
+
+        if not pending_questions:
+            st.success("🎉 Không có câu hỏi nào đang chờ duyệt.")
+        else:
+            st.info(f"Có **{len(pending_questions)}** câu hỏi đang chờ duyệt.")
+
+            for q in pending_questions:
+                teacher_name = q.get('giao_vien', {}).get('ho_ten', 'Unknown')
+                chu_de_info = q.get('chu_de', {})
+                location = f"Khối {chu_de_info.get('lop')} - {chu_de_info.get('mon_hoc')} - {chu_de_info.get('ten_chu_de')}"
+
+                with st.expander(f"⏳ {teacher_name}: {q['noi_dung'][:50]}... ({q['muc_do']})", expanded=True):
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.markdown(f"**Vị trí:** {location}")
+                        st.markdown(f"**Nội dung:** {q['noi_dung']}")
+                        if q.get('hinh_anh_url'): st.image(q['hinh_anh_url'], width=200)
+                        st.markdown("**Đáp án đúng:**");
+                        st.code("\n".join(q['dap_an_dung']))
+                        st.markdown("**Đáp án sai:**");
+                        st.code("\n".join(q.get('dap_an_khac') or []))
+
+                    with c2:
+                        with st.form(f"approve_form_{q['id']}"):
+                            new_muc_do = st.selectbox("Sửa mức độ:", MUC_DO_OPTIONS,
+                                                      index=MUC_DO_OPTIONS.index(q['muc_do']), key=f"lvl_{q['id']}")
+                            c_ok, c_no = st.columns(2)
+                            if c_ok.form_submit_button("✅ Duyệt", type="primary", use_container_width=True):
+                                try:
+                                    supabase.table("cau_hoi").update(
+                                        {"trang_thai_duyet": "approved", "muc_do": new_muc_do}).eq("id",
+                                                                                                   q['id']).execute()
+                                    if q.get('noi_dung'):
+                                        supabase.table("task_queue").insert(
+                                            {"task_type": "tts_generation", "status": "pending",
+                                             "payload": {"question_id": q['id'], "noi_dung": q['noi_dung']}}).execute()
+                                    st.success("Đã duyệt!");
+                                    crud_utils.clear_all_cached_data();
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Lỗi: {e}")
+
+                            if c_no.form_submit_button("❌ Từ chối", use_container_width=True):
+                                try:
+                                    supabase.table("cau_hoi").update({"trang_thai_duyet": "rejected"}).eq("id", q[
+                                        'id']).execute()
+                                    st.warning("Đã từ chối.");
+                                    crud_utils.clear_all_cached_data();
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Lỗi: {e}")
+    # =======================================================
+    # 🆕 TAB 5: CÔNG CỤ UPLOAD ẢNH HÀNG LOẠT
+    # =======================================================
+    with tab_upload_tools:
+        st.markdown("### 🛠️ Công cụ Upload ảnh hàng loạt")
+        st.info(
+            "Sử dụng công cụ này để upload ảnh câu hỏi/đáp án lên Server, sau đó nhận file CSV chứa link để dán vào file Import Excel.")
+
+        uploaded_images = st.file_uploader(
+            "Chọn các file ảnh (JPG, PNG)",
+            type=['png', 'jpg', 'jpeg', 'gif'],
+            accept_multiple_files=True
+        )
+
+        if uploaded_images:
+            st.write(f"Đã chọn **{len(uploaded_images)}** file.")
+
+            if st.button(f"🚀 Bắt đầu Upload {len(uploaded_images)} ảnh", type="primary"):
+                results = []
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                total_files = len(uploaded_images)
+
+                for i, img_file in enumerate(uploaded_images):
+                    try:
+                        # 1. Tạo tên file an toàn (uuid + tên gốc)
+                        # Để tránh trùng lặp và lỗi ký tự đặc biệt
+                        file_ext = os.path.splitext(img_file.name)[1].lower()
+                        clean_name = str(uuid.uuid4())[:8] + "_" + img_file.name
+                        storage_path = clean_name  # Lưu ngay thư mục gốc của bucket hoặc subfolder
+
+                        status_text.text(f"Đang upload ({i + 1}/{total_files}): {img_file.name}...")
+
+                        # 2. Upload lên Supabase
+                        file_bytes = img_file.getvalue()
+                        supabase.storage.from_(IMAGE_BUCKET).upload(
+                            path=storage_path,
+                            file=file_bytes,
+                            file_options={"content-type": img_file.type, "upsert": "false"}
+                        )
+
+                        # 3. Lấy Public URL
+                        public_url = supabase.storage.from_(IMAGE_BUCKET).get_public_url(storage_path)
+
+                        results.append({
+                            "Ten_File_Goc": img_file.name,
+                            "URL_Cong_Khai": public_url
+                        })
+
+                    except Exception as e:
+                        st.error(f"Lỗi khi upload '{img_file.name}': {e}")
+                        results.append({
+                            "Ten_File_Goc": img_file.name,
+                            "URL_Cong_Khai": "ERROR"
+                        })
+
+                    # Update tiến độ
+                    progress_bar.progress((i + 1) / total_files)
+
+                status_text.success("✅ Đã hoàn thành quá trình upload!")
+
+                # 4. Tạo DataFrame và Nút Download CSV
+                if results:
+                    df_links = pd.DataFrame(results)
+                    st.dataframe(df_links, use_container_width=True)
+
+                    csv = df_links.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Tải danh sách Link (CSV)",
+                        data=csv,
+                        file_name="danh_sach_link_anh.csv",
+                        mime="text/csv",
+                    )
+                    st.caption(
+                        "Mẹo: Mở file CSV này, copy cột 'URL_Cong_Khai' và dán vào file Excel Import Câu hỏi.")

@@ -301,8 +301,12 @@ def get_questions_for_exercise(bai_tap_id: str):
         question_ids = [link['cau_hoi_id'] for link in res_links.data]
         if not question_ids: return []
 
+        # --- CẬP NHẬT: Thêm 'audio_url' và 'hinh_anh_url' vào select ---
         res_questions = supabase.table("cau_hoi").select(
-            "id, noi_dung, dap_an_dung, dap_an_khac, muc_do, diem_so, loai_cau_hoi").in_("id", question_ids).execute()
+            "id, noi_dung, dap_an_dung, dap_an_khac, muc_do, diem_so, loai_cau_hoi, audio_url, hinh_anh_url"
+        ).in_("id", question_ids).execute()
+        # ----------------------------------------------------------------
+
         if not res_questions.data: return []
 
         questions_data = res_questions.data
@@ -313,6 +317,7 @@ def get_questions_for_exercise(bai_tap_id: str):
             dap_an_dung_raw = q.get("dap_an_dung") if isinstance(q.get("dap_an_dung"), list) else []
             dap_an_dung = [str(ans) for ans in dap_an_dung_raw]
             loai_cau_hoi = q.get("loai_cau_hoi", "mot_lua_chon")
+
             questions.append({
                 "id": str(q["id"]),
                 "noi_dung": q["noi_dung"],
@@ -320,7 +325,9 @@ def get_questions_for_exercise(bai_tap_id: str):
                 "lua_chon": lua_chon,
                 "dap_an_dung": dap_an_dung,
                 "muc_do": q.get("muc_do", "biết"),
-                "diem_so": q.get("diem_so", 1)
+                "diem_so": q.get("diem_so", 1),
+                "audio_url": q.get("audio_url"),  # <-- Lấy Audio URL
+                "hinh_anh_url": q.get("hinh_anh_url")  # <-- Lấy Ảnh minh họa
             })
         return questions
     except Exception as e:

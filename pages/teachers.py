@@ -1,5 +1,5 @@
 # ===============================================
-# 🧑‍🏫 Trang giáo viên - teachers.py (SỬA LỖI FINAL: TÍCH HỢP LẠI TAB LỚP HỌC)
+# 🧑‍🏫 Trang giáo viên - teachers.py (ĐÃ SỬA LỖI IMPORT)
 # ===============================================
 import streamlit as st
 import pandas as pd
@@ -11,12 +11,15 @@ from backend.data_service import get_teacher_exercises, can_delete_exercise, upd
     delete_exercise_and_links
 import streamlit.components.v1 as components
 
-# Import tabs
+# --- SỬA LỖI IMPORT TẠI ĐÂY ---
+# Thêm 'pages.' vào trước teacher_pages
 from pages.teacher_pages import render_tab_results
 from pages.teacher_pages import render_tab_manage_ex
 from pages.teacher_pages import render_tab_exam
 from pages.teacher_pages import render_tab_practice
-from pages.teacher_pages import render_tab_announce
+from pages.teacher_pages import render_tab_contribute
+
+# ------------------------------
 
 st.set_page_config(page_title="AI Tutor - Giáo viên", page_icon="🧑‍🏫", layout="wide")
 
@@ -33,10 +36,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 try:
-    st.image("data/banner.jpg", width='stretch')
+    st.image("data/banner.jpg", use_container_width=True)
 except Exception:
     st.warning("Không tải được ảnh banner.")
-    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", width='stretch')
+    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", use_container_width=True)
 
 # ==========================
 # KIỂM TRA ĐĂNG NHẬP
@@ -49,6 +52,17 @@ if "role" not in st.session_state or st.session_state["role"] != "teacher":
 
 giao_vien_id = st.session_state.get("giao_vien_id")
 giao_vien_ten = st.session_state.get("giao_vien_ten", "Giáo viên")
+
+# ==========================
+# LẤY THÔNG TIN CHỨC VỤ (PHÂN QUYỀN)
+# ==========================
+try:
+    user_info_res = supabase.table("giao_vien").select("chuc_vu").eq("id", giao_vien_id).maybe_single().execute()
+    current_chuc_vu = user_info_res.data.get("chuc_vu", "Giáo viên") if user_info_res.data else "Giáo viên"
+except Exception as e:
+    print(f"Lỗi lấy chức vụ: {e}")
+    current_chuc_vu = "Giáo viên"
+
 
 # ==========================
 # TẢI DỮ LIỆU (GIỮ NGUYÊN)
@@ -85,25 +99,35 @@ def load_teacher_data(giao_vien_id_param):
 all_classes, all_students, teacher_classes, teacher_students = load_teacher_data(giao_vien_id)
 
 # ==========================
-# UI KHUNG 2 CỘT (GIỮ NGUYÊN)
+# UI KHUNG 2 CỘT
 # ==========================
 col1, col2 = st.columns([1, 5])
 
 # ==========================
-# CỘT TRÁI – GIỮ NGUYÊN
+# CỘT TRÁI – THÔNG TIN GV
 # ==========================
 with col1:
     st.image("https://cdn-icons-png.flaticon.com/512/1995/1995574.png", width=120)
     st.markdown(f"<h1 class='teacher-name-title'>{giao_vien_ten}</h1>", unsafe_allow_html=True)
+
+    if current_chuc_vu != "Giáo viên":
+        st.caption(f"⭐ Chức vụ: **{current_chuc_vu}**")
+
     st.divider()
 
     with st.expander("📝 Sửa thông tin cá nhân"):
         with st.form("update_teacher_info_form"):
             new_ho_ten = st.text_input("Họ tên", value=giao_vien_ten)
-            current_email = supabase.table("giao_vien").select("email").eq("id", giao_vien_id).execute().data[0]["email"]
+            try:
+                current_email_res = supabase.table("giao_vien").select("email").eq("id", giao_vien_id).execute()
+                current_email = current_email_res.data[0]["email"] if current_email_res.data else ""
+            except:
+                current_email = ""
+
             new_email = st.text_input("Email", value=current_email)
             if st.form_submit_button("Lưu thông tin"):
-                supabase.table("giao_vien").update({"ho_ten": new_ho_ten, "email": new_email}).eq("id", giao_vien_id).execute()
+                supabase.table("giao_vien").update({"ho_ten": new_ho_ten, "email": new_email}).eq("id",
+                                                                                                  giao_vien_id).execute()
                 st.session_state["giao_vien_ten"] = new_ho_ten
                 st.success("Cập nhật thành công!")
                 st.rerun()
@@ -120,12 +144,12 @@ with col1:
                     st.error("Mật khẩu không hợp lệ.")
 
     st.divider()
-    if st.button("🔓 Đăng xuất", width='stretch'):
+    if st.button("🔓 Đăng xuất", use_container_width=True):
         st.session_state.clear()
         st.switch_page("app.py")
 
 # ==========================
-# CỘT PHẢI – TABS (GIỮ NGUYÊN)
+# CỘT PHẢI – TABS CHÍNH
 # ==========================
 with col2:
     st.subheader("🧑‍🏫 Bảng điều khiển Giáo viên")
@@ -136,21 +160,22 @@ with col2:
         "🗂️ Quản lý Bài tập đã giao",
         "🏁 Giao bài Kiểm tra CĐ",
         "✏️ Giao bài Luyện tập BH",
-        "📣 Gửi Thông báo"
     ]
+
+    SHOW_CONTRIBUTE_TAB = current_chuc_vu in ["Tổ trưởng", "Ban giám hiệu"]
+
+    if SHOW_CONTRIBUTE_TAB:
+        TAB_NAMES.append("✍️ Đóng góp câu hỏi")
 
     if "teacher_active_tab_index" not in st.session_state:
         st.session_state["teacher_active_tab_index"] = 0
 
-    # ❌ ĐÃ LOẠI BỎ ĐOẠN JAVASCRIPT GÂY LỖI NHẢY TAB
-    # KHÔNG ĐỤNG ĐẾN JS NỮA
-
-    tab1, tab2, tab_manage, tab3, tab4, tab_announce = st.tabs(TAB_NAMES)
+    tabs = st.tabs(TAB_NAMES)
 
     # -------------------------
     # TAB 1: LỚP HỌC
     # -------------------------
-    with tab1:
+    with tabs[0]:
         st.session_state["teacher_active_tab_index"] = 0
         st.subheader("📘 Danh sách lớp bạn phụ trách")
 
@@ -167,47 +192,49 @@ with col2:
 
         if selected_class_name != "Tất cả":
             selected_id = teacher_class_options[selected_class_name]
-            df_display_students = df_display_students[df_display_students['lop_id'].astype(str) == selected_id]
+            if not df_display_students.empty:
+                df_display_students = df_display_students[df_display_students['lop_id'].astype(str) == selected_id]
 
         if not df_display_students.empty:
             hs_df_display = df_display_students[
                 ["ho_ten", "ma_hoc_sinh", "email", "ngay_sinh", "gioi_tinh"]
             ].rename(columns={"ho_ten": "Họ tên", "ma_hoc_sinh": "Mã HS"})
-            st.dataframe(hs_df_display, width='stretch', hide_index=True)
+            st.dataframe(hs_df_display, use_container_width=True, hide_index=True)
         else:
-            st.caption("Chưa có học sinh nào trong lớp này.")
+            st.caption("Chưa có học sinh nào trong danh sách hiển thị.")
 
     # -------------------------
     # TAB 2 – KẾT QUẢ
     # -------------------------
-    with tab2:
+    with tabs[1]:
         st.session_state["teacher_active_tab_index"] = 1
         render_tab_results.render(teacher_students, teacher_classes, all_classes)
 
     # -------------------------
     # TAB 3 – QUẢN LÝ BÀI TẬP
     # -------------------------
-    with tab_manage:
+    with tabs[2]:
         st.session_state["teacher_active_tab_index"] = 2
         render_tab_manage_ex.render(giao_vien_id, teacher_classes)
 
     # -------------------------
     # TAB 4 – GIAO KT
     # -------------------------
-    with tab3:
+    with tabs[3]:
         st.session_state["teacher_active_tab_index"] = 3
         render_tab_exam.render(giao_vien_id, teacher_class_options, all_classes, TAB_NAMES)
 
     # -------------------------
     # TAB 5 – GIAO LUYỆN TẬP
     # -------------------------
-    with tab4:
+    with tabs[4]:
         st.session_state["teacher_active_tab_index"] = 4
         render_tab_practice.render(giao_vien_id, teacher_class_options, all_classes, TAB_NAMES)
 
     # -------------------------
-    # TAB 6 – GỬI THÔNG BÁO (MỚI)
+    # TAB 6 – ĐÓNG GÓP
     # -------------------------
-    with tab_announce:
-        st.session_state["teacher_active_tab_index"] = 5
-        render_tab_announce.render(giao_vien_id, teacher_class_options, TAB_NAMES)
+    if SHOW_CONTRIBUTE_TAB:
+        with tabs[5]:
+            st.session_state["teacher_active_tab_index"] = 5
+            render_tab_contribute.render(giao_vien_id)
