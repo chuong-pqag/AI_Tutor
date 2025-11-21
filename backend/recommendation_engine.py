@@ -1,5 +1,5 @@
 # File: backend/recommendation_engine.py
-# (BẢN CHÍNH THỨC: Tương thích với Lõi AI Mới & Fix Logic ID)
+# (BẢN FULL 100%: Không rút gọn)
 
 import joblib
 import pandas as pd
@@ -227,7 +227,7 @@ def generate_recommendation(hoc_sinh_id: str, chu_de_id: str, diem: float, lop: 
             # Nếu hết bài -> Review bài cuối
             action = "review"
             suggested_topic_id = str(chu_de_id)
-            print(f"Hoàn thành lộ trình Môn '{mon_hoc_name}'.")
+            print(f"Hoàn thành lộ trình Môn '{mon_hoc_name}' cho lớp {lop}. Gợi ý ôn tập.")
 
     elif action == "review":
         # Ôn tập -> Chính chủ đề hiện tại

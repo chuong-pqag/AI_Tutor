@@ -13,7 +13,8 @@ from . import crud_utils
 from backend.supabase_client import supabase
 
 # Bucket để upload ảnh — ưu tiên lấy từ biến môi trường, nếu không có dùng giá trị mặc định
-IMAGE_BUCKET = os.environ.get("IMAGE_BUCKET", "question-images")
+# IMAGE_BUCKET = os.environ.get("IMAGE_BUCKET", "question-images")
+IMAGE_BUCKET = "question_images"
 # Nếu hệ thống của bạn dùng tên khác, đổi "question-images" thành tên bucket thực tế.
 
 @st.cache_data(ttl=60)
@@ -411,25 +412,35 @@ def render(mon_hoc_options):
                 elif st.button("🚀 Import Câu hỏi", width='stretch'):
                     count = 0;
                     errors = []
+                    tasks_to_queue = []
                     with st.spinner("Đang import..."):
                         for index, row in df_upload.iterrows():
                             try:
-                                chu_de_id_str = str(row["chu_de_id"]).strip()
-                                if chu_de_id_str not in valid_chu_de_ids: raise ValueError("Chủ đề không hợp lệ.")
+                                cd_id = str(row["chu_de_id"]).strip()
+                                if cd_id not in active_chu_de_ids: raise ValueError(
+                                    "Chủ đề không hợp lệ (hoặc không thuộc năm học này).")
 
-                                noi_dung = str(row.get("noi_dung", "")).strip()
-                                hinh_anh_url = str(row.get("hinh_anh_url", "")).strip() if pd.notna(
-                                    row.get("hinh_anh_url")) else None
-                                if not noi_dung and not hinh_anh_url: raise ValueError("Thiếu nội dung/hình ảnh.")
+                                nd = str(row.get("noi_dung", "")).strip()
+                                # Xử lý ảnh: nếu là 'nan' thì coi như None
+                                raw_img = str(row.get("hinh_anh_url", "")).strip()
+                                img = raw_img if raw_img and raw_img.lower() != 'nan' else None
+
+                                if not nd and not img: raise ValueError("Thiếu nội dung/ảnh.")
+
+                                # === FIX LỖI "NAN" UUID TẠI ĐÂY ===
+                                raw_bh_id = str(row.get("bai_hoc_id", "")).strip()
+                                # Nếu rỗng hoặc là 'nan' thì gán là None
+                                bai_hoc_id_clean = None if (not raw_bh_id or raw_bh_id.lower() == 'nan') else raw_bh_id
+                                # ==================================
 
                                 new_id = str(uuid.uuid4())
                                 insert_data = {
                                     "id": new_id,
-                                    "chu_de_id": chu_de_id_str,
-                                    "bai_hoc_id": str(row.get("bai_hoc_id", "")).strip() or None,
+                                    "chu_de_id": cd_id,
+                                    "bai_hoc_id": bai_hoc_id_clean,  # Sử dụng biến đã làm sạch
                                     "loai_cau_hoi": str(row.get("loai_cau_hoi", "mot_lua_chon")).strip().lower(),
-                                    "noi_dung": noi_dung,
-                                    "hinh_anh_url": hinh_anh_url,
+                                    "noi_dung": nd,
+                                    "hinh_anh_url": img,
                                     "dap_an_dung": [s.strip() for s in str(row.get("dap_an_dung", "")).split(";") if
                                                     s.strip()],
                                     "dap_an_khac": [s.strip() for s in str(row.get("dap_an_khac", "")).split(";") if
@@ -439,14 +450,16 @@ def render(mon_hoc_options):
                                     "trang_thai_duyet": "approved"
                                 }
                                 supabase.table(table_name).insert(insert_data).execute()
-
-                                if noi_dung:
-                                    supabase.table("task_queue").insert(
-                                        {"task_type": "tts_generation", "status": "pending",
-                                         "payload": {"question_id": new_id, "noi_dung": noi_dung}}).execute()
+                                if nd:
+                                    tasks_to_queue.append({"task_type": "tts_generation", "status": "pending",
+                                                           "payload": {"question_id": new_id, "noi_dung": nd}})
                                 count += 1
                             except Exception as e:
                                 errors.append(f"Dòng {index + 2}: {e}")
+
+                        if tasks_to_queue:
+                            supabase.table("task_queue").insert(tasks_to_queue).execute()
+
                     st.success(f"✅ Import thành công {count} câu hỏi.");
                     crud_utils.clear_all_cached_data()
                     if errors: st.error("Lỗi:"); st.code("\n".join(errors))

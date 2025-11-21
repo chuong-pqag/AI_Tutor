@@ -147,11 +147,17 @@ def render(giao_vien_id, teacher_class_options, all_classes, TAB_NAMES):
                 elif tong_cau_yeu_cau_lt <= 0:
                     st.error("Tổng số câu phải lớn hơn 0.")
                 else:
+                    # GỌI HÀM VỚI THAM SỐ MỚI: lop_id
                     result_lt = generate_practice_exercise(
-                        bai_hoc_id=bai_hoc_id_lt, giao_vien_id=giao_vien_id, ten_bai=ten_bai_lt,
-                        so_cau_biet=so_cau_biet_lt, so_cau_hieu=so_cau_hieu_lt,
-                        so_cau_van_dung=so_cau_van_dung_lt
+                        bai_hoc_id=bai_hoc_id_lt,
+                        giao_vien_id=giao_vien_id,
+                        ten_bai=ten_bai_lt,
+                        so_cau_biet=so_cau_biet_lt,
+                        so_cau_hieu=so_cau_hieu_lt,
+                        so_cau_van_dung=so_cau_van_dung_lt,
+                        lop_id=selected_lop_id_lt  # <--- TRUYỀN THÊM THAM SỐ NÀY
                     )
+
                     if result_lt:
                         st.success(
                             f"✅ Đã giao bài LT '{ten_bai_lt}' ({tong_cau_yeu_cau_lt} câu) cho bài học '{selected_lesson_name_lt}'")
