@@ -506,7 +506,7 @@ def render(mon_hoc_options):
                             new_muc_do = st.selectbox("Sửa mức độ:", MUC_DO_OPTIONS,
                                                       index=MUC_DO_OPTIONS.index(q['muc_do']), key=f"lvl_{q['id']}")
                             c_ok, c_no = st.columns(2)
-                            if c_ok.form_submit_button("✅ Duyệt", type="primary", use_container_width=True):
+                            if c_ok.form_submit_button("✅ Duyệt", type="primary", width='stretch'):
                                 try:
                                     supabase.table("cau_hoi").update(
                                         {"trang_thai_duyet": "approved", "muc_do": new_muc_do}).eq("id",
@@ -521,7 +521,7 @@ def render(mon_hoc_options):
                                 except Exception as e:
                                     st.error(f"Lỗi: {e}")
 
-                            if c_no.form_submit_button("❌ Từ chối", use_container_width=True):
+                            if c_no.form_submit_button("❌ Từ chối", width='stretch'):
                                 try:
                                     supabase.table("cau_hoi").update({"trang_thai_duyet": "rejected"}).eq("id", q[
                                         'id']).execute()
@@ -595,7 +595,7 @@ def render(mon_hoc_options):
                 # 4. Tạo DataFrame và Nút Download CSV
                 if results:
                     df_links = pd.DataFrame(results)
-                    st.dataframe(df_links, use_container_width=True)
+                    st.dataframe(df_links, width='stretch')
 
                     csv = df_links.to_csv(index=False).encode('utf-8')
                     st.download_button(

@@ -39,7 +39,7 @@ def render(teacher_classes, teacher_students, teacher_class_options):
                     columns={"ho_ten": "Họ tên", "ma_hoc_sinh": "Mã HS", "ngay_sinh": "Ngày sinh",
                              "gioi_tinh": "Giới tính"}
                 )
-                st.dataframe(hs_df_display, use_container_width=True, hide_index=True)
+                st.dataframe(hs_df_display, width='stretch', hide_index=True)
             else:
                 st.caption("Lớp này chưa có học sinh nào.")
 
@@ -60,7 +60,7 @@ def render(teacher_classes, teacher_students, teacher_class_options):
                     columns={"ho_ten": "Họ tên", "ma_hoc_sinh": "Mã HS", "ngay_sinh": "Ngày sinh",
                              "gioi_tinh": "Giới tính"}
                 )
-                st.dataframe(hs_df_display, use_container_width=True, hide_index=True)
+                st.dataframe(hs_df_display, width='stretch', hide_index=True)
             else:
                 st.caption("Lớp này chưa có học sinh nào.")
         else:

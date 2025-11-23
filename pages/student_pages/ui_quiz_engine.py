@@ -167,11 +167,11 @@ def render_question_widget(q, widget_key, current_lop):
                 btn_label = "✅ Đã chọn" if is_selected else "Chọn"
                 btn_type = "primary" if is_selected else "secondary"
 
-                if st.button(btn_label, key=f"btn_{widget_key}_{idx}", type=btn_type, use_container_width=True):
+                if st.button(btn_label, key=f"btn_{widget_key}_{idx}", type=btn_type, width='stretch'):
                     st.session_state[widget_key] = url
                     st.rerun()  # Rerun cục bộ trong fragment (nếu gọi từ fragment)
 
-                st.image(url, use_container_width=True)
+                st.image(url, width='stretch')
 
     # --- Trường hợp: Đáp án là Chữ (Radio) ---
     elif not is_image_answer and loai_cau_hoi == "mot_lua_chon":

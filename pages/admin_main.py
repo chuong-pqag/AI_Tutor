@@ -50,9 +50,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 try:
-    st.image("data/banner.jpg", use_container_width=True)
+    st.image("data/banner.jpg", width='stretch')
 except Exception:
-    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", use_container_width=True)
+    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", width='stretch')
 
 # 🔐 Kiểm tra đăng nhập
 if "role" not in st.session_state or st.session_state["role"] != "admin":

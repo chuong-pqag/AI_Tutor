@@ -28,8 +28,22 @@ st.markdown("""
     .stTextInput>div>div:focus-within, .stNumberInput>div>div:focus-within, .stSelectbox>div>div:focus-within { border-color: #ff6347; box-shadow: 0 2px 8px rgba(255, 99, 71, 0.3); }
     div[data-testid="stRadio"] > label { display: none; }
     div[data-testid="stRadio"] > div { justify-content: center; width: 100%; color: #0066cc; }
-    .stButton>button { background-color: #ffd700; color: #333333; font-weight: bold; border: none; border-radius: 8px; transition: background-color 0.3s; }
-    .stButton>button:hover { background-color: #ffc107; }
+
+    /* --- CẬP NHẬT NÚT BẤM MÀU CAM --- */
+    .stButton>button { 
+        background-color: #ff6600; /* Màu cam đậm */
+        color: #ffffff; /* Chữ trắng */
+        font-weight: bold; 
+        border: none; 
+        border-radius: 8px; 
+        transition: background-color 0.3s; 
+    }
+    .stButton>button:hover { 
+        background-color: #e65c00; /* Màu cam tối hơn khi di chuột */
+        color: #ffffff;
+    }
+    /* -------------------------------- */
+
     div.login-box h3 { text-align: center; color: #ff6347; }
     div[data-testid="stImage"] { width: 100%; overflow: hidden; }
     </style>
@@ -88,7 +102,9 @@ with col_main:
                     st.session_state["role"] = "student"
                     st.session_state["hoc_sinh_id"] = hs["id"]
                     st.session_state["ho_ten"] = hs["ho_ten"]
-
+                    # --- THÊM DÒNG NÀY ---
+                    st.session_state["hoc_sinh_lop_id"] = hs.get("lop_id")  # Lưu UUID của lớp
+                    # ---------------------
                     lop_id = hs.get("lop_id")
                     current_lop = None # Khởi tạo là None
                     current_ten_lop = "Chưa xếp lớp"

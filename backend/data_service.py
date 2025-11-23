@@ -179,18 +179,25 @@ def get_practice_exercises_by_lesson(bai_hoc_id: str):
         print(f"Lỗi khi lấy bài luyện tập cho bài học {bai_hoc_id}: {e}"); return []
 
 
-def get_topic_test_by_topic(chu_de_id: str):
+def get_topic_test_by_topic(chu_de_id: str, lop_id: str = None):  # <--- Thêm tham số lop_id
     try:
-        res = supabase.table("bai_tap").select("*").eq("chu_de_id", chu_de_id).eq("loai_bai_tap",
-                                                                                  "kiem_tra_chu_de").limit(
-            1).maybe_single().execute()
-        # Kiểm tra nếu response có dữ liệu (data)
+        query = supabase.table("bai_tap").select("*") \
+            .eq("chu_de_id", chu_de_id) \
+            .eq("loai_bai_tap", "kiem_tra_chu_de")
+
+        # CHỈNH SỬA QUAN TRỌNG: Nếu có lop_id, bắt buộc phải khớp
+        if lop_id:
+            query = query.eq("lop_id", lop_id)
+
+        res = query.limit(1).maybe_single().execute()
+
         if res and res.data:
             return res.data
         else:
             return None
     except Exception as e:
-        print(f"Lỗi khi lấy bài kiểm tra chủ đề {chu_de_id}: {e}"); return None
+        print(f"Lỗi khi lấy bài kiểm tra chủ đề {chu_de_id}: {e}")
+        return None
 
 
 def get_exercise_by_id(bai_tap_id: str):

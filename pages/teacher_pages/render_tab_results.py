@@ -116,7 +116,7 @@ def render(teacher_students, teacher_classes, all_classes):  # <--- Chữ ký h�
         'Kết quả': df.apply(lambda row: f"{row.get('so_cau_dung', '?')}/{row.get('tong_cau', '?')}", axis=1)
     })
 
-    st.dataframe(df_display.dropna(subset=['Chủ đề']), use_container_width=True, hide_index=True)
+    st.dataframe(df_display.dropna(subset=['Chủ đề']), width='stretch', hide_index=True)
 
     # 4. VẼ BIỂU ĐỒ (Dựa trên dữ liệu đã lọc) (Giữ nguyên)
 

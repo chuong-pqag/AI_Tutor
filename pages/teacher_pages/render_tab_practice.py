@@ -140,7 +140,7 @@ def render(giao_vien_id, teacher_class_options, all_classes, TAB_NAMES):
 
             st.markdown(f"#### **Tổng số câu đã chọn: `{tong_cau_yeu_cau_lt}`**")
 
-            if st.button("🚀 Sinh & Giao bài Luyện tập BH", key="btn_giao_lt", use_container_width=True,
+            if st.button("🚀 Sinh & Giao bài Luyện tập BH", key="btn_giao_lt", width='stretch',
                          disabled=disable_button_lt):
                 if not ten_bai_lt:
                     st.error("Vui lòng nhập tên bài luyện tập.")

@@ -109,7 +109,7 @@ def render(giao_vien_id):
             dap_an_khac_raw = st.text_area("Đáp án SAI (Mỗi dòng 1 đáp án / hoặc Link ảnh)", height=80)
 
         st.markdown("---")
-        submitted = st.form_submit_button("🚀 Gửi câu hỏi duyệt", use_container_width=True)
+        submitted = st.form_submit_button("🚀 Gửi câu hỏi duyệt", width='stretch')
 
         if submitted:
             # VALIDATION

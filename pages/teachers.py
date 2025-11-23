@@ -1,30 +1,23 @@
 # ===============================================
-# 🧑‍🏫 Trang giáo viên - teachers.py (ĐÃ SỬA LỖI IMPORT)
+# 🧑‍🏫 Trang giáo viên - teachers.py (BẢN FIX: GHI NHỚ TAB)
 # ===============================================
 import streamlit as st
 import pandas as pd
-import datetime
 from backend.supabase_client import supabase
-from backend.class_test_service import generate_class_test, generate_practice_exercise
-from backend.data_service import get_lessons_by_topic, get_question_counts
-from backend.data_service import get_teacher_exercises, can_delete_exercise, update_exercise_title, \
-    delete_exercise_and_links
-import streamlit.components.v1 as components
 
-# --- SỬA LỖI IMPORT TẠI ĐÂY ---
-# Thêm 'pages.' vào trước teacher_pages
+# Import các module render (đảm bảo cấu trúc thư mục đúng)
 from pages.teacher_pages import render_tab_results
 from pages.teacher_pages import render_tab_manage_ex
 from pages.teacher_pages import render_tab_exam
 from pages.teacher_pages import render_tab_practice
 from pages.teacher_pages import render_tab_contribute
-
-# ------------------------------
+from pages.teacher_pages import render_tab_classes
+from pages.teacher_pages import render_tab_announce  # Import thêm module Thông báo
 
 st.set_page_config(page_title="AI Tutor - Giáo viên", page_icon="🧑‍🏫", layout="wide")
 
 # ==========================
-# CSS + BANNER (GIỮ NGUYÊN)
+# CSS + BANNER
 # ==========================
 st.markdown("""
     <style>
@@ -32,6 +25,16 @@ st.markdown("""
     [data-testid="stSidebar"] {display: none;}
     div[data-testid="stHorizontalBlock"] > div:first-child > div { display: flex; flex-direction: column; align-items: center; text-align: center; }
     .teacher-name-title { font-family: 'Times New Roman'; font-size: 14pt !important; font-weight: bold; }
+
+    /* Tùy chỉnh Radio button cho giống Menu Tab */
+    div[data-testid="stRadio"] > div {
+        background-color: #f0f2f6;
+        padding: 10px;
+        border-radius: 10px;
+        display: flex;
+        justify-content: space-around;
+        width: 100%;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -54,7 +57,7 @@ giao_vien_id = st.session_state.get("giao_vien_id")
 giao_vien_ten = st.session_state.get("giao_vien_ten", "Giáo viên")
 
 # ==========================
-# LẤY THÔNG TIN CHỨC VỤ (PHÂN QUYỀN)
+# LẤY THÔNG TIN CHỨC VỤ
 # ==========================
 try:
     user_info_res = supabase.table("giao_vien").select("chuc_vu").eq("id", giao_vien_id).maybe_single().execute()
@@ -65,7 +68,7 @@ except Exception as e:
 
 
 # ==========================
-# TẢI DỮ LIỆU (GIỮ NGUYÊN)
+# TẢI DỮ LIỆU
 # ==========================
 @st.cache_data(ttl=300)
 def load_teacher_data(giao_vien_id_param):
@@ -92,11 +95,15 @@ def load_teacher_data(giao_vien_id_param):
             })
             teacher_ids.add(str(a["lop_id"]))
 
+    # Lọc học sinh thuộc các lớp giáo viên dạy
     teacher_students = [s for s in all_students if str(s.get("lop_id")) in teacher_ids]
     return all_classes, all_students, teacher_classes, teacher_students
 
 
 all_classes, all_students, teacher_classes, teacher_students = load_teacher_data(giao_vien_id)
+
+# Tạo options lớp học cho các selectbox
+teacher_class_options = {c["ten_lop"]: str(c["id"]) for c in teacher_classes}
 
 # ==========================
 # UI KHUNG 2 CỘT
@@ -144,97 +151,81 @@ with col1:
                     st.error("Mật khẩu không hợp lệ.")
 
     st.divider()
-    if st.button("🔓 Đăng xuất", use_container_width=True):
+    if st.button("🔓 Đăng xuất", width='stretch'):
         st.session_state.clear()
         st.switch_page("app.py")
 
 # ==========================
-# CỘT PHẢI – TABS CHÍNH
+# CỘT PHẢI – TABS CHÍNH (SỬ DỤNG RADIO ĐỂ LƯU TRẠNG THÁI)
 # ==========================
 with col2:
     st.subheader("🧑‍🏫 Bảng điều khiển Giáo viên")
 
+    # 1. ĐỊNH NGHĨA DANH SÁCH TAB
     TAB_NAMES = [
         "📘 Lớp học",
-        "📈 Kết quả học sinh",
-        "🗂️ Quản lý Bài tập đã giao",
-        "🏁 Giao bài Kiểm tra CĐ",
-        "✏️ Giao bài Luyện tập BH",
+        "📈 Kết quả HS",
+        "🗂️ QL Bài tập",
+        "🏁 Giao KT Chủ đề",
+        "✏️ Giao Luyện tập",
+        "📣 Thông báo"
     ]
 
     SHOW_CONTRIBUTE_TAB = current_chuc_vu in ["Tổ trưởng", "Ban giám hiệu"]
-
     if SHOW_CONTRIBUTE_TAB:
         TAB_NAMES.append("✍️ Đóng góp câu hỏi")
 
-    if "teacher_active_tab_index" not in st.session_state:
-        st.session_state["teacher_active_tab_index"] = 0
+    # 2. SỬ DỤNG RADIO BUTTON THAY VÌ ST.TABS
+    # Tham số `key` giúp Streamlit tự động lưu trạng thái khi reload
+    selected_tab = st.radio(
+        "Điều hướng:",
+        TAB_NAMES,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="teacher_active_tab_radio"  # <-- KEY QUAN TRỌNG
+    )
 
-    tabs = st.tabs(TAB_NAMES)
+    st.divider()
 
+    # 3. HIỂN THỊ NỘI DUNG TƯƠNG ỨNG
     # -------------------------
     # TAB 1: LỚP HỌC
     # -------------------------
-    with tabs[0]:
-        st.session_state["teacher_active_tab_index"] = 0
-        st.subheader("📘 Danh sách lớp bạn phụ trách")
-
-        teacher_class_options = {c["ten_lop"]: str(c["id"]) for c in teacher_classes}
-        class_name_list = ["Tất cả"] + sorted(list(teacher_class_options.keys()))
-
-        selected_class_name = st.selectbox(
-            "🔎 Lọc theo Lớp học:",
-            class_name_list,
-            key="class_filter_tab1"
-        )
-
-        df_display_students = pd.DataFrame(teacher_students)
-
-        if selected_class_name != "Tất cả":
-            selected_id = teacher_class_options[selected_class_name]
-            if not df_display_students.empty:
-                df_display_students = df_display_students[df_display_students['lop_id'].astype(str) == selected_id]
-
-        if not df_display_students.empty:
-            hs_df_display = df_display_students[
-                ["ho_ten", "ma_hoc_sinh", "email", "ngay_sinh", "gioi_tinh"]
-            ].rename(columns={"ho_ten": "Họ tên", "ma_hoc_sinh": "Mã HS"})
-            st.dataframe(hs_df_display, use_container_width=True, hide_index=True)
-        else:
-            st.caption("Chưa có học sinh nào trong danh sách hiển thị.")
+    if selected_tab == "📘 Lớp học":
+        render_tab_classes.render(teacher_classes, teacher_students, teacher_class_options)
 
     # -------------------------
-    # TAB 2 – KẾT QUẢ
+    # TAB 2: KẾT QUẢ
     # -------------------------
-    with tabs[1]:
-        st.session_state["teacher_active_tab_index"] = 1
+    elif selected_tab == "📈 Kết quả HS":
         render_tab_results.render(teacher_students, teacher_classes, all_classes)
 
     # -------------------------
-    # TAB 3 – QUẢN LÝ BÀI TẬP
+    # TAB 3: QUẢN LÝ BÀI TẬP
     # -------------------------
-    with tabs[2]:
-        st.session_state["teacher_active_tab_index"] = 2
+    elif selected_tab == "🗂️ QL Bài tập":
         render_tab_manage_ex.render(giao_vien_id, teacher_classes)
 
     # -------------------------
-    # TAB 4 – GIAO KT
+    # TAB 4: GIAO KIỂM TRA
     # -------------------------
-    with tabs[3]:
-        st.session_state["teacher_active_tab_index"] = 3
+    elif selected_tab == "🏁 Giao KT Chủ đề":
         render_tab_exam.render(giao_vien_id, teacher_class_options, all_classes, TAB_NAMES)
 
     # -------------------------
-    # TAB 5 – GIAO LUYỆN TẬP
+    # TAB 5: GIAO LUYỆN TẬP
     # -------------------------
-    with tabs[4]:
-        st.session_state["teacher_active_tab_index"] = 4
+    elif selected_tab == "✏️ Giao Luyện tập":
         render_tab_practice.render(giao_vien_id, teacher_class_options, all_classes, TAB_NAMES)
 
     # -------------------------
-    # TAB 6 – ĐÓNG GÓP
+    # TAB 6: THÔNG BÁO (Mới)
     # -------------------------
-    if SHOW_CONTRIBUTE_TAB:
-        with tabs[5]:
-            st.session_state["teacher_active_tab_index"] = 5
-            render_tab_contribute.render(giao_vien_id)
+    elif selected_tab == "📣 Thông báo":
+        render_tab_announce.render(giao_vien_id, teacher_class_options, TAB_NAMES)
+
+    # -------------------------
+    # TAB 7: ĐÓNG GÓP
+    # -------------------------
+    elif SHOW_CONTRIBUTE_TAB and selected_tab == "✍️ Đóng góp câu hỏi":
+        render_tab_contribute.render(giao_vien_id)
