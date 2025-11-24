@@ -1,5 +1,5 @@
 # File: pages/student_pages/ui_learning.py
-# (BẢN FINAL: Fix lỗi lộ đề + Tối ưu UI + Cập nhật trạng thái AI)
+# (BẢN FINAL: Nút Quay lại bảng điều khiển màu cam + Fix lỗi lộ đề + Tối ưu UI)
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -30,7 +30,7 @@ def render_content_detail(hoc_sinh_id, current_lop):
 
     if not selected_topic_id:
         st.error("Lỗi: Không tìm thấy chủ đề được chọn.")
-        if st.button("Quay lại Dashboard"):
+        if st.button("Quay lại bảng điều khiển", type="primary"):
             st.session_state['viewing_topic'] = False
             st.rerun()
         st.stop()
@@ -39,7 +39,7 @@ def render_content_detail(hoc_sinh_id, current_lop):
     current_topic_info = get_topic_by_id(selected_topic_id)
     if not current_topic_info:
         st.error(f"Lỗi: Không thể tải thông tin cho Chủ đề ID {selected_topic_id}")
-        if st.button("Quay lại Dashboard"):
+        if st.button("Quay lại bảng điều khiển", type="primary"):
             st.session_state['viewing_topic'] = False
             st.rerun()
         st.stop()
@@ -48,8 +48,8 @@ def render_content_detail(hoc_sinh_id, current_lop):
     selected_subject_name = current_topic_info.get("mon_hoc", "N/A")
     current_tuan = current_topic_info.get("tuan")
 
-    # 3. NÚT QUAY LẠI & TIÊU ĐỀ
-    if st.button("⬅️ Quay lại Dashboard"):
+    # 3. NÚT QUAY LẠI (ĐÃ SỬA MÀU VÀ TEXT) & TIÊU ĐỀ
+    if st.button("⬅️ Quay lại bảng điều khiển", type="primary"):
         st.session_state['viewing_topic'] = False
         # Xóa các state liên quan đến bài học đang xem để dọn dẹp
         keys_to_remove = ['selected_topic_id', 'latest_suggestion_id']
@@ -158,9 +158,8 @@ def render_content_detail(hoc_sinh_id, current_lop):
         st.markdown("---")
         st.header(f"🏁 Kiểm tra Chủ đề")
 
-        # --- SỬA LỖI: Gọi hàm với lop_id để tránh lộ đề lớp khác ---
+        # Gọi hàm với lop_id để tránh lộ đề lớp khác
         topic_test = get_topic_test_by_topic(selected_topic_id, lop_id=student_class_id)
-        # -----------------------------------------------------------
 
         if not topic_test:
             st.info(f"Giáo viên chưa giao bài kiểm tra cho chủ đề này tại lớp của bạn.")

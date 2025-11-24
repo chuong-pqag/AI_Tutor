@@ -644,49 +644,60 @@ def get_latest_ai_recommendation(hoc_sinh_id: str, mon_hoc: str = None, lop: int
         print(f"Lỗi get_latest_ai_recommendation: {e}")
         return None
 
+
 def get_topics_status(hoc_sinh_id: str, mon_hoc_name: str, lop: int):
     """
-    1.3. Lấy tất cả chủ đề cho môn học/lớp và đánh dấu trạng thái Đã/Chưa hoàn thành kiểm tra.
-    Sửa lỗi kiểu ID: chuẩn hóa tất cả về str để so sánh chính xác.
+    1.3. Lấy trạng thái chủ đề (Bản nâng cấp cho Hybrid Model).
+    - Trả về thêm 'best_score' để Frontend phân loại Vàng/Xanh.
     """
     if lop is None or not mon_hoc_name:
         return []
 
     try:
-        # 1. Lấy TẤT CẢ chủ đề cho môn học/lớp này
-        all_topics_res = supabase.table("chu_de").select("id, ten_chu_de, tuan, prerequisite_id").eq("lop", lop).eq(
-            "mon_hoc", mon_hoc_name).order("tuan", desc=False).execute()
+        # 1. Lấy TẤT CẢ chủ đề
+        all_topics_res = supabase.table("chu_de").select("id, ten_chu_de, tuan, prerequisite_id") \
+            .eq("lop", lop).eq("mon_hoc", mon_hoc_name).order("tuan", desc=False).execute()
         all_topics = all_topics_res.data or []
 
-        if not all_topics:
-            return []
+        if not all_topics: return []
 
-        # 2. Lấy tất cả bai_tap_id là 'kiem_tra_chu_de' cho các chu_de trong all_topics
-        topic_ids = [t['id'] for t in all_topics]
+        topic_ids = [str(t['id']) for t in all_topics]
 
-        topic_test_res = supabase.table("bai_tap").select("id, chu_de_id").in_("chu_de_id", topic_ids).eq("loai_bai_tap",
-                                                                                               "kiem_tra_chu_de").execute()
-        topic_test_ids = [b['id'] for b in topic_test_res.data or []]
-        test_map = {str(b['id']): str(b['chu_de_id']) for b in (topic_test_res.data or [])}
+        # 2. Tìm bài kiểm tra
+        topic_test_res = supabase.table("bai_tap").select("id, chu_de_id") \
+            .in_("chu_de_id", topic_ids).eq("loai_bai_tap", "kiem_tra_chu_de").execute()
+        valid_bai_tap_ids = [b['id'] for b in topic_test_res.data or []]
 
-        # 3. Lấy ket_qua_test cho các bài kiểm tra này (và chuẩn hóa kiểu chu_de_id về str)
-        if not topic_test_ids:
-            completed_topic_ids = set()
-        else:
-            completed_res = supabase.table("ket_qua_test").select("chu_de_id").eq("hoc_sinh_id", hoc_sinh_id).in_(
-                "bai_tap_id", topic_test_ids).execute()
-            # CHUẨN HÓA: ép tất cả về str để so sánh đúng
-            completed_topic_ids = {str(r['chu_de_id']) for r in (completed_res.data or [])}
+        # 3. Lấy điểm số (Lấy hết các lần làm bài đạt >= 5.0)
+        passed_info = {}  # Map: topic_id -> max_score
 
-        # 4. Kết hợp và gán trạng thái (chuẩn hóa id thành str)
+        if valid_bai_tap_ids:
+            passed_res = supabase.table("ket_qua_test").select("chu_de_id, diem") \
+                .eq("hoc_sinh_id", hoc_sinh_id) \
+                .in_("bai_tap_id", valid_bai_tap_ids) \
+                .gte("diem", 5.0) \
+                .execute()
+
+            # Tìm điểm cao nhất cho mỗi chủ đề
+            for r in (passed_res.data or []):
+                t_id = str(r['chu_de_id'])
+                score = float(r.get('diem', 0))
+                if t_id not in passed_info or score > passed_info[t_id]:
+                    passed_info[t_id] = score
+
+        # 4. Gán trạng thái & Điểm
         topics_status = []
         for topic in all_topics:
-            topic_id = str(topic['id'])
+            t_id = str(topic['id'])
+            is_completed = t_id in passed_info
+            best_score = passed_info.get(t_id, 0.0) if is_completed else 0.0
+
             topics_status.append({
-                "id": topic_id,
+                "id": t_id,
                 "ten_chu_de": topic.get('ten_chu_de'),
                 "tuan": topic.get('tuan'),
-                "completed": topic_id in completed_topic_ids,
+                "completed": is_completed,
+                "best_score": best_score,  # <--- TRƯỜNG MỚI QUAN TRỌNG
                 "prerequisite_id": topic.get('prerequisite_id')
             })
 
@@ -696,23 +707,24 @@ def get_topics_status(hoc_sinh_id: str, mon_hoc_name: str, lop: int):
         return []
 
 
-# =========================================================
-# 🆕 4️⃣ HÀM MỚI CHO TÍNH NĂNG THÔNG BÁO (ANNOUNCEMENT)
-# =========================================================
+# --- CẬP NHẬT TRONG FILE: backend/data_service.py ---
 
-def create_announcement(giao_vien_id: str, lop_id: str, tieu_de: str, noi_dung: str):
+def create_announcement(giao_vien_id: str, lop_id: str, tieu_de: str, noi_dung: str, hoc_sinh_id: str = None):
     """
-    2.1. Giáo viên tạo một thông báo mới cho một lớp.
+    2.1. Giáo viên tạo thông báo (Chung hoặc Riêng).
+    - Nếu hoc_sinh_id = None -> Chung cả lớp.
+    - Nếu có hoc_sinh_id -> Riêng học sinh.
     """
     if not giao_vien_id or not lop_id or not tieu_de:
-        raise ValueError("Thiếu thông tin bắt buộc (GV, Lớp, Tiêu đề) để tạo thông báo.")
+        raise ValueError("Thiếu thông tin bắt buộc.")
 
     try:
         data = {
             "giao_vien_id": giao_vien_id,
             "lop_id": lop_id,
             "tieu_de": tieu_de,
-            "noi_dung": noi_dung
+            "noi_dung": noi_dung,
+            "hoc_sinh_id": hoc_sinh_id  # Cột mới
         }
         res = supabase.table("thong_bao").insert(data).execute()
         return res.data
@@ -721,21 +733,32 @@ def create_announcement(giao_vien_id: str, lop_id: str, tieu_de: str, noi_dung: 
         raise e
 
 
-def get_announcements_for_student(lop_id: str, limit: int = 5):
+def get_announcements_for_student(lop_id: str, hoc_sinh_id: str, limit: int = 20):
     """
-    2.2. Lấy các thông báo mới nhất cho học sinh (dựa trên lop_id).
+    2.2. Lấy thông báo cho học sinh, chia làm 2 loại: CHUNG và RIÊNG.
+    Trả về dictionary: {'general': [], 'private': []}
     """
-    if not lop_id:
-        return []
-    try:
-        res = supabase.table("thong_bao").select(
-            "tieu_de, noi_dung, created_at, giao_vien(ho_ten)"
-        ).eq("lop_id", lop_id).order("created_at", desc=True).limit(limit).execute()
+    if not lop_id or not hoc_sinh_id:
+        return {'general': [], 'private': []}
 
-        return res.data or []
+    try:
+        # 1. Lấy thông báo CHUNG (cùng lớp VÀ hoc_sinh_id là NULL)
+        res_general = supabase.table("thong_bao").select(
+            "tieu_de, noi_dung, created_at, giao_vien(ho_ten)"
+        ).eq("lop_id", lop_id).is_("hoc_sinh_id", "null").order("created_at", desc=True).limit(limit).execute()
+
+        # 2. Lấy thông báo RIÊNG (khớp hoc_sinh_id)
+        res_private = supabase.table("thong_bao").select(
+            "tieu_de, noi_dung, created_at, giao_vien(ho_ten)"
+        ).eq("hoc_sinh_id", hoc_sinh_id).order("created_at", desc=True).limit(limit).execute()
+
+        return {
+            'general': res_general.data or [],
+            'private': res_private.data or []
+        }
     except Exception as e:
-        print(f"Lỗi khi lấy thông báo cho học sinh: {e}")
-        return []
+        print(f"Lỗi khi lấy thông báo: {e}")
+        return {'general': [], 'private': []}
 
 
 def get_announcements_for_teacher(giao_vien_id: str):

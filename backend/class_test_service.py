@@ -1,5 +1,5 @@
 # File: backend/class_test_service.py
-# (BẢN CẬP NHẬT: Hỗ trợ lưu lop_id và tong_so_cau)
+# (BẢN FINAL: Tự động thêm suffix mức độ vào tiêu đề bài tập)
 
 import random
 from backend.supabase_client import supabase
@@ -12,7 +12,6 @@ def generate_class_test(
 ):
     """
     Sinh bài KIỂM TRA CHỦ ĐỀ cho lớp.
-    Lấy câu hỏi ngẫu nhiên theo cấu trúc 3 mức độ từ ngân hàng câu hỏi của chủ đề.
     """
     selected_question_ids = []
 
@@ -24,7 +23,7 @@ def generate_class_test(
                               .eq("muc_do", "biết")
                               .execute().data or [])
             if len(questions_biet) < so_cau_biet:
-                print(f"Lỗi (KT): Không đủ {so_cau_biet} câu 'biết' (Có: {len(questions_biet)}).")
+                print(f"Lỗi (KT): Không đủ {so_cau_biet} câu 'biết'.")
                 return False
             selected_question_ids.extend([q["id"] for q in random.sample(questions_biet, so_cau_biet)])
 
@@ -35,7 +34,7 @@ def generate_class_test(
                               .eq("muc_do", "hiểu")
                               .execute().data or [])
             if len(questions_hieu) < so_cau_hieu:
-                print(f"Lỗi (KT): Không đủ {so_cau_hieu} câu 'hiểu' (Có: {len(questions_hieu)}).")
+                print(f"Lỗi (KT): Không đủ {so_cau_hieu} câu 'hiểu'.")
                 return False
             selected_question_ids.extend([q["id"] for q in random.sample(questions_hieu, so_cau_hieu)])
 
@@ -46,7 +45,7 @@ def generate_class_test(
                                   .eq("muc_do", "vận dụng")
                                   .execute().data or [])
             if len(questions_van_dung) < so_cau_van_dung:
-                print(f"Lỗi (KT): Không đủ {so_cau_van_dung} câu 'vận dụng' (Có: {len(questions_van_dung)}).")
+                print(f"Lỗi (KT): Không đủ {so_cau_van_dung} câu 'vận dụng'.")
                 return False
             selected_question_ids.extend([q["id"] for q in random.sample(questions_van_dung, so_cau_van_dung)])
 
@@ -57,26 +56,24 @@ def generate_class_test(
     # Xáo trộn thứ tự câu hỏi
     random.shuffle(selected_question_ids)
 
-    # Tạo bản ghi bai_tap
-    # Lưu ý: Cần đảm bảo bảng 'bai_tap' đã có cột 'lop_id' và 'tong_so_cau'
     try:
+        # Lưu bài tập
         res_bai_tap = supabase.table("bai_tap").insert({
             "chu_de_id": chu_de_id,
             "bai_hoc_id": None,
             "tieu_de": ten_bai,
             "mo_ta": f"Bài kiểm tra do GV giao.",
             "loai_bai_tap": "kiem_tra_chu_de",
-            "tong_so_cau": len(selected_question_ids),  # Lưu tổng số câu
+            "tong_so_cau": len(selected_question_ids),
             "giao_vien_id": giao_vien_id,
-            "lop_id": lop_id  # Lưu ID lớp để hiển thị đúng
+            "lop_id": lop_id
         }).execute()
 
-        if not res_bai_tap.data:
-            return False
+        if not res_bai_tap.data: return False
 
         bai_tap_id = res_bai_tap.data[0]["id"]
 
-        # Liên kết câu hỏi vào bài tập
+        # Liên kết câu hỏi
         links = [{"bai_tap_id": bai_tap_id, "cau_hoi_id": q_id} for q_id in selected_question_ids]
         supabase.table("bai_tap_cau_hoi").insert(links).execute()
 
@@ -90,12 +87,12 @@ def generate_class_test(
 def generate_practice_exercise(
         bai_hoc_id: str, giao_vien_id: str, ten_bai: str,
         so_cau_biet: int, so_cau_hieu: int, so_cau_van_dung: int,
-        lop_id: str = None  # Thêm tham số lop_id
+        lop_id: str = None
 ):
     """
     Sinh bài LUYỆN TẬP cho một BÀI HỌC cụ thể.
+    (ĐÃ CẬP NHẬT: Tự động thêm hậu tố mức độ vào tên bài)
     """
-    # Lấy thông tin bài học để biết thuộc chủ đề nào
     try:
         lesson_info = supabase.table("bai_hoc").select("chu_de_id").eq("id", bai_hoc_id).maybe_single().execute().data
         if not lesson_info or not lesson_info.get("chu_de_id"):
@@ -141,21 +138,33 @@ def generate_practice_exercise(
 
     random.shuffle(selected_question_ids)
 
+    # --- LOGIC MỚI: TỰ ĐỘNG TẠO SUFFIX MỨC ĐỘ ---
+    level_labels = []
+    if so_cau_biet > 0: level_labels.append("Biết")
+    if so_cau_hieu > 0: level_labels.append("Hiểu")
+    if so_cau_van_dung > 0: level_labels.append("Vận dụng")
+
+    final_title = ten_bai
+    if level_labels:
+        suffix = " - ".join(level_labels)
+        # Chỉ thêm nếu người dùng chưa tự tay gõ vào tiêu đề
+        if f"Mức độ: {suffix}" not in ten_bai:
+            final_title = f"{ten_bai} (Mức độ: {suffix})"
+    # --------------------------------------------
+
     try:
-        # Tạo bản ghi bai_tap
         res_bai_tap = supabase.table("bai_tap").insert({
             "chu_de_id": chu_de_id_of_lesson,
             "bai_hoc_id": bai_hoc_id,
-            "tieu_de": ten_bai,
-            "mo_ta": f"Bài luyện tập do GV giao. (B:{so_cau_biet}, H:{so_cau_hieu}, VD:{so_cau_van_dung})",
+            "tieu_de": final_title,  # Sử dụng tên đã xử lý
+            "mo_ta": f"Bài luyện tập tự động. (B:{so_cau_biet}, H:{so_cau_hieu}, VD:{so_cau_van_dung})",
             "loai_bai_tap": "luyen_tap",
             "tong_so_cau": len(selected_question_ids),
             "giao_vien_id": giao_vien_id,
-            "lop_id": lop_id  # Lưu ID lớp
+            "lop_id": lop_id
         }).execute()
 
-        if not res_bai_tap.data:
-            return False
+        if not res_bai_tap.data: return False
 
         bai_tap_id = res_bai_tap.data[0]["id"]
         links = [{"bai_tap_id": bai_tap_id, "cau_hoi_id": q_id} for q_id in selected_question_ids]

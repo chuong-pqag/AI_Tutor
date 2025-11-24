@@ -1,122 +1,131 @@
 # ===============================================
-# 📘 Trang học sinh - students.py (CẬP NHẬT LAYOUT 3 CỘT)
+# 📘 Trang học sinh - students.py (CẬP NHẬT: THÔNG BÁO 2 CẤP)
 # ===============================================
 import streamlit as st
 import pandas as pd
-import datetime
-from backend.supabase_client import supabase
 from backend.data_service import (
     get_student,
-    get_learning_paths,
-    get_topic_by_id,
-    get_announcements_for_student  # <-- THÊM MỚI (để dùng ở col3)
+    get_announcements_for_student  # Hàm này đã được update ở Bước 2
 )
 
-# --- KHAI BÁO IMPORT CÁC MODULE CON ---
-# (Sửa lỗi import bằng cách thêm 'pages.')
+# Import UI modules
 from pages.student_pages import ui_info
 from pages.student_pages import ui_dashboard
 from pages.student_pages import ui_learning
 from pages.student_pages import ui_history
 
-# --- KẾT THÚC KHAI BÁO ---
-
 st.set_page_config(page_title="AI Tutor - Học sinh", page_icon="📘", layout="wide")
 
-# CSS (Giữ nguyên)
+# CSS
 st.markdown("""
     <style>
-    /* ... (CSS giữ nguyên) ... */
-    [data-testid="stSidebarNav"] {display: none;}
-    [data-testid="stSidebar"] {display: none;}
-    div[data-testid="stHorizontalBlock"] > div:first-child > div { display: flex; flex-direction: column; align-items: center; text-align: center; }
-    div[data-testid="stHorizontalBlock"] > div:first-child > div h1, div[data-testid="stHorizontalBlock"] > div:first-child > div h3 { text-align: center; }
-    .student-name-title { font-family: 'Times New Roman', Times, serif; font-size: 14pt !important; font-weight: bold; color: #31333F; padding-bottom: 0.5rem; margin-block-start: 0; margin-block-end: 0; text-align: center; }
+    [data-testid="stSidebarNav"], [data-testid="stSidebar"] {display: none;}
+    .student-name-title { font-family: 'Times New Roman'; font-size: 14pt; font-weight: bold; text-align: center; }
+    div.stContainer { border: 1px solid #f0f2f6; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
 try:
     st.image("data/banner.jpg", width='stretch')
-except Exception:
-    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", width='stretch')
+except:
+    pass
 
-# ===============================================
-# KIỂM TRA PHIÊN ĐĂNG NHẬP
-# ===============================================
 if "hoc_sinh_id" not in st.session_state:
-    st.warning("⚠️ Vui lòng đăng nhập từ trang chủ.")
-    if st.button("Về trang đăng nhập"): st.switch_page("app.py")
-    st.stop()
+    st.switch_page("app.py")
 
-# Tải dữ liệu từ session
+# Tải dữ liệu session
 hoc_sinh_id = st.session_state["hoc_sinh_id"]
 ho_ten = st.session_state["ho_ten"]
 current_lop = st.session_state.get("lop")
 current_ten_lop = st.session_state.get("ten_lop", "Chưa xếp lớp")
-subject_map = st.session_state.get("subject_map", {})  # Map môn học
+subject_map = st.session_state.get("subject_map", {})
+
 
 # ===============================================
-# (ĐÃ THAY ĐỔI) BỐ CỤC 3 CỘT CHÍNH
+# HÀM HELPER ĐỂ HIỂN THỊ DANH SÁCH RÚT GỌN
 # ===============================================
-col_info, col_main, col_announce = st.columns([1, 4, 1.5])  # Tỷ lệ [Info, Main, Announce]
+def render_announcement_list(messages, title, empty_msg):
+    st.markdown(f"###### {title}")
 
-# CỘT 1: THÔNG TIN HỌC SINH & ĐIỀU HƯỚNG
+    if not messages:
+        st.caption(f"*{empty_msg}*")
+        return
+
+    # 1. Hiển thị 2 tin mới nhất
+    latest_msgs = messages[:2]
+    for msg in latest_msgs:
+        gv_name = msg.get('giao_vien', {}).get('ho_ten', 'Giáo viên')
+        ngay = pd.to_datetime(msg.get('created_at')).strftime('%d/%m')
+
+        with st.container():
+            st.markdown(f"**{msg['tieu_de']}**")
+            st.caption(f"👨‍🏫 {gv_name} | 📅 {ngay}")
+            st.markdown(f"{msg['noi_dung']}")
+
+    # 2. Nếu còn tin cũ hơn -> Nút xem thêm
+    older_msgs = messages[2:]
+    if older_msgs:
+        with st.expander(f"📂 Xem thêm ({len(older_msgs)} tin cũ)"):
+            for msg in older_msgs:
+                gv_name = msg.get('giao_vien', {}).get('ho_ten', 'GV')
+                ngay = pd.to_datetime(msg.get('created_at')).strftime('%d/%m')
+                st.markdown(f"---")
+                st.markdown(f"**{msg['tieu_de']}** ({ngay})")
+                st.markdown(msg['noi_dung'])
+
+
+# ===============================================
+# LAYOUT 3 CỘT
+# ===============================================
+col_info, col_main, col_announce = st.columns([1, 4, 1.5])
+
+# CỘT 1: INFO
 with col_info:
     ui_info.render_student_info(hoc_sinh_id, ho_ten, current_lop, current_ten_lop)
 
-# CỘT 2: NỘI DUNG CHÍNH (Tabs học tập)
+# CỘT 2: MAIN
 with col_main:
-    st.title(f"Chào mừng bạn quay trở lại! 👋")
+    st.subheader(f"Chào mừng bạn quay trở lại! 👋")
     st.markdown("---")
 
-    # Kiểm tra điều kiện tiên quyết
     if current_lop is None or not subject_map:
-        st.warning("⚠️ Hệ thống chưa sẵn sàng. Vui lòng kiểm tra thông tin lớp học và môn học.")
+        st.warning("Hệ thống chưa sẵn sàng (Lỗi Lớp/Môn).")
         st.stop()
 
     tab_learning, tab_history = st.tabs(["💡 Bài học & Luyện tập", "📜 Lịch sử học tập"])
 
-    # --- TAB 1: BÀI HỌC & LUYỆN TẬP ---
     with tab_learning:
         if st.session_state.get('viewing_topic', False):
-            ui_learning.render_content_detail(
-                hoc_sinh_id=hoc_sinh_id,
-                current_lop=current_lop
-            )
+            ui_learning.render_content_detail(hoc_sinh_id, current_lop)
         else:
-            ui_dashboard.render_dashboard(
-                hoc_sinh_id=hoc_sinh_id,
-                current_lop=current_lop,
-                subject_map=subject_map
-            )
+            ui_dashboard.render_dashboard(hoc_sinh_id, current_lop, subject_map)
 
-    # --- TAB 2: LỊCH SỬ HỌC TẬP ---
     with tab_history:
         ui_history.render_history(hoc_sinh_id)
 
-# ===============================================
-# (THÊM MỚI) CỘT 3: THÔNG BÁO
-# ===============================================
+# CỘT 3: THÔNG BÁO (CẬP NHẬT)
 with col_announce:
     st.subheader("📣 Thông báo")
 
-    # Lấy lop_id của học sinh (cần cho hàm get_announcements_for_student)
+    # Lấy lop_id
     student_data = get_student(hoc_sinh_id)
     student_lop_id = student_data.get('lop_id') if student_data else None
 
-    announcements = []
     if student_lop_id:
-        # Lấy 5 thông báo mới nhất
-        announcements = get_announcements_for_student(student_lop_id, limit=5)
+        # Gọi hàm lấy 2 loại thông báo (Đã update ở Backend)
+        data = get_announcements_for_student(student_lop_id, hoc_sinh_id, limit=10)
 
-    if not announcements:
-        st.info("Chưa có thông báo nào mới từ giáo viên của bạn.")
+        general_msgs = data.get('general', [])
+        private_msgs = data.get('private', [])
+
+        # 1. THÔNG BÁO RIÊNG (Ưu tiên hiển thị trước nếu có)
+        if private_msgs:
+            st.info("💌 **Có tin nhắn riêng cho bạn!**")
+            render_announcement_list(private_msgs, "Của riêng bạn:", "Không có tin nhắn riêng.")
+            st.divider()
+
+        # 2. THÔNG BÁO CHUNG
+        render_announcement_list(general_msgs, "Thông báo lớp:", "Lớp chưa có thông báo mới.")
+
     else:
-        for ann in announcements:
-            gv_name = ann.get('giao_vien', {}).get('ho_ten', 'Giáo viên')
-            ngay_gui = pd.to_datetime(ann.get('created_at')).strftime('%d/%m/%Y')
-
-            with st.container(border=True):
-                st.markdown(f"**{ann.get('tieu_de')}**")
-                st.caption(f"Từ: {gv_name} | Ngày: {ngay_gui}")
-                st.markdown(f"{ann.get('noi_dung')}")
+        st.warning("Chưa cập nhật thông tin lớp.")

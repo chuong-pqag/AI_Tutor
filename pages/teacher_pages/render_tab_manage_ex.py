@@ -132,7 +132,7 @@ def render(giao_vien_id, teacher_classes):
         df_display,
         key="teacher_ex_df_select",
         hide_index=True,
-        use_container_width=True,
+        width='stretch',
         on_select="rerun",
         selection_mode="single-row"
     )
