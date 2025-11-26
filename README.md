@@ -1,3 +1,14 @@
+---
+title: AI Tutor
+emoji: 🎓
+colorFrom: blue
+colorTo: pink
+sdk: streamlit
+sdk_version: 1.37.0
+app_file: app.py
+pinned: false
+---
+
 # 🤖 AI TUTOR: HỆ THỐNG GIA SƯ CÁ NHÂN HÓA THÍCH ỨNG
 
 AI Tutor là nền tảng học tập thông minh dành cho học sinh Tiểu học, tập

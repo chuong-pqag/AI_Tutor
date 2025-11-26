@@ -43,7 +43,7 @@ def render():
             gioi_tinh = st.selectbox("Giới tính", ["Nam", "Nữ", "Khác", None], index=3)
             email = st.text_input("Email (Tùy chọn)")
 
-            submitted = st.form_submit_button("➕ Thêm học sinh", width='stretch')  # <-- ĐÃ CẬP NHẬT
+            submitted = st.form_submit_button("➕ Thêm học sinh", use_container_width=True)  # <-- ĐÃ CẬP NHẬT
             if submitted:
                 if not lop_options or lop_ten is None:
                     st.error(f"Chưa có lớp học nào hoạt động trong năm {selected_year} hoặc chưa chọn lớp.")
@@ -143,7 +143,7 @@ def render():
                 df_to_show[cols_exist],
                 key="hs_df_select",
                 hide_index=True,
-                width='stretch',  # <-- ĐÃ CẬP NHẬT
+                use_container_width=True,  # <-- ĐÃ CẬP NHẬT
                 on_select="rerun",
                 selection_mode="single-row"
             )
@@ -221,7 +221,7 @@ def render():
 
                         col_update, col_delete, col_clear = st.columns(3)
 
-                        if col_update.form_submit_button("💾 Lưu thay đổi", width='stretch', disabled=disabled_editing):
+                        if col_update.form_submit_button("💾 Lưu thay đổi", use_container_width=True, disabled=disabled_editing):
                             update_data = {
                                 "ho_ten": ho_ten_edit,
                                 # Lấy lop_id từ lop_options_local (đã lọc)
@@ -246,7 +246,7 @@ def render():
                                 except Exception as e:
                                     st.error(f"Lỗi cập nhật học sinh: {e}")
 
-                        if col_delete.form_submit_button("❌ Xóa học sinh này", width='stretch',
+                        if col_delete.form_submit_button("❌ Xóa học sinh này", use_container_width=True,
                                                          disabled=disabled_editing):
                             try:
                                 supabase.table(table_name).delete().eq("id", selected_item_original['id']).execute()
@@ -255,7 +255,7 @@ def render():
                             except Exception as e:
                                 st.error(f"Lỗi xóa học sinh: {e}")
 
-                        if col_clear.form_submit_button("Hủy chọn", width='stretch'):
+                        if col_clear.form_submit_button("Hủy chọn", use_container_width=True):
                             if 'hs_selected_item_id' in st.session_state: del st.session_state['hs_selected_item_id']
                             st.rerun()
         else:
@@ -280,7 +280,7 @@ def render():
 
                 if not valid_lop_ids:
                     st.error(f"Chưa có lớp học nào hoạt động trong năm {selected_year} để import học sinh.")
-                elif st.button("🚀 Bắt đầu Import Học Sinh", width='stretch'):
+                elif st.button("🚀 Bắt đầu Import Học Sinh", use_container_width=True):
                     count_hs = 0;
                     errors_hs = []
                     with st.spinner("Đang import..."):

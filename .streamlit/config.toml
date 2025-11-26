@@ -1,0 +1,10 @@
+           [server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+fileWatcherType = "none"
+
+# --- THÊM PHẦN NÀY ĐỂ TẮT CẢNH BÁO ---
+[client]
+showErrorDetails = true
+toolbarMode = "viewer"

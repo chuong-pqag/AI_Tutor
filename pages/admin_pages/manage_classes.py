@@ -33,7 +33,7 @@ def render():
             # Năm học được tự động điền từ biến toàn cục
             nam_hoc_display = st.text_input("Năm học", value=selected_year, disabled=True)
 
-            submitted = st.form_submit_button("➕ Thêm lớp", width='stretch')
+            submitted = st.form_submit_button("➕ Thêm lớp", use_container_width=True)
             if submitted:
                 if not ten_lop:
                     st.error("Tên lớp không được để trống.")
@@ -96,7 +96,7 @@ def render():
                 df_to_show,
                 key="lop_df_select",
                 hide_index=True,
-                width='stretch',
+                use_container_width=True,
                 on_select="rerun",
                 selection_mode="single-row"
             )
@@ -138,7 +138,7 @@ def render():
 
                         col_update, col_delete, col_clear = st.columns(3)
 
-                        if col_update.form_submit_button("💾 Lưu thay đổi", width='stretch',
+                        if col_update.form_submit_button("💾 Lưu thay đổi", use_container_width=True,
                                                          disabled=disabled_editing):
                             update_data = {"ten_lop": ten_lop_edit, "khoi": khoi_edit}  # nam_hoc không đổi
                             try:
@@ -149,7 +149,7 @@ def render():
                             except Exception as e:
                                 st.error(f"Lỗi cập nhật: {e}")
 
-                        if col_delete.form_submit_button("❌ Xóa mục này", width='stretch',
+                        if col_delete.form_submit_button("❌ Xóa mục này", use_container_width=True,
                                                          disabled=disabled_editing):
                             try:
                                 supabase.table(table_name).delete().eq("id", selected_item_original["id"]).execute()
@@ -158,7 +158,7 @@ def render():
                             except Exception as e:
                                 st.error(f"Lỗi khi xóa: {e}. Có thể lớp này đang được sử dụng.")
 
-                        if col_clear.form_submit_button("Hủy chọn", width='stretch'):
+                        if col_clear.form_submit_button("Hủy chọn", use_container_width=True):
                             if 'lop_selected_item_id' in st.session_state: del st.session_state['lop_selected_item_id']
                             st.rerun()
         else:

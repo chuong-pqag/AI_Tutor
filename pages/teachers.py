@@ -1,6 +1,5 @@
 # ===============================================
-# 🧑‍🏫 Trang giáo viên - teachers.py
-# (BẢN FIX: Lọc trùng lớp học khi dạy nhiều môn + Button Cam)
+# 🧑‍🏫 Trang giáo viên - teachers.py (PERFORMANCE OPTIMIZED)
 # ===============================================
 import streamlit as st
 import pandas as pd
@@ -17,6 +16,7 @@ from pages.teacher_pages import render_tab_contribute
 from pages.teacher_pages import render_tab_classes
 from pages.teacher_pages import render_tab_announce
 
+# 1. Page Config
 st.set_page_config(page_title="AI Tutor - Giáo viên", page_icon="🧑‍🏫", layout="wide")
 
 # ==========================
@@ -26,86 +26,87 @@ st.markdown("""
     <style>
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stSidebar"] {display: none;}
-    div[data-testid="stHorizontalBlock"] > div:first-child > div { display: flex; flex-direction: column; align-items: center; text-align: center; }
-    .teacher-name-title { font-family: 'Times New Roman'; font-size: 14pt !important; font-weight: bold; }
+
+    div[data-testid="stHorizontalBlock"] > div:first-child > div { 
+        display: flex; flex-direction: column; align-items: center; text-align: center; 
+    }
 
     div[data-testid="stRadio"] > div {
-        background-color: #f0f2f6;
-        padding: 10px;
-        border-radius: 10px;
-        display: flex;
-        justify-content: space-around;
-        width: 100%;
+        background-color: #f0f2f6; padding: 10px; border-radius: 10px;
+        display: flex; justify-content: space-around; width: 100%;
     }
 
-    /* Button Cam */
+    /* FIX NÚT BẤM */
     .stButton>button { 
-        background-color: #ff6600; 
-        color: #ffffff; 
-        font-weight: bold; 
-        border: none; 
-        border-radius: 8px; 
-        transition: background-color 0.3s; 
+        background-color: #ff6600; color: #ffffff; font-weight: bold; 
+        border: none; border-radius: 8px; transition: background-color 0.3s;
+        white-space: nowrap !important;
+        padding: 0.25rem 0.5rem; font-size: 14px; min-height: auto;
     }
-    .stButton>button:hover { 
-        background-color: #e65c00;
-        color: #ffffff;
+    .stButton>button:hover { background-color: #e65c00; color: #ffffff; }
+
+    /* FIX ẢNH AVATAR */
+    div[data-testid="stExpander"] div[data-testid="stImage"] img {
+        width: 80px !important; height: 80px !important;
+        object-fit: cover !important; border-radius: 10px !important;
+        margin: 0 auto !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
+# Load Banner
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(current_dir)
+banner_path = os.path.join(root_dir, 'data', 'banner.jpg')
+
 try:
-    st.image("data/banner.jpg", width='stretch')
-except Exception:
-    st.warning("Không tải được ảnh banner.")
-    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", width='stretch')
+    if os.path.exists(banner_path):
+        st.image(banner_path, use_column_width=True)
+    else:
+        st.markdown("<h1>🧑‍🏫 TRANG GIÁO VIÊN</h1>", unsafe_allow_html=True)
+except:
+    pass
 
 # ==========================
 # KIỂM TRA ĐĂNG NHẬP
 # ==========================
 if "role" not in st.session_state or st.session_state["role"] != "teacher":
-    st.warning("⚠️ Vui lòng quay lại trang Đăng nhập để chọn vai trò Giáo viên.")
-    if st.button("Về trang đăng nhập", width='stretch', type="primary"):
+    st.warning("⚠️ Vui lòng quay lại trang Đăng nhập.")
+    if st.button("Về trang chủ", use_container_width=True, type="primary"):
         st.switch_page("app.py")
     st.stop()
 
 giao_vien_id = st.session_state.get("giao_vien_id")
 giao_vien_ten = st.session_state.get("giao_vien_ten", "Giáo viên")
 
-# ==========================
-# LẤY THÔNG TIN CHỨC VỤ
-# ==========================
-try:
-    user_info_res = supabase.table("giao_vien").select("chuc_vu").eq("id", giao_vien_id).maybe_single().execute()
-    current_chuc_vu = user_info_res.data.get("chuc_vu", "Giáo viên") if user_info_res.data else "Giáo viên"
-except Exception as e:
-    current_chuc_vu = "Giáo viên"
-
 
 # ==========================
-# TẢI DỮ LIỆU (ĐÃ SỬA LỖI TRÙNG LẶP)
+# TẢI DỮ LIỆU TỐI ƯU (SERVER-SIDE FILTERING)
 # ==========================
-@st.cache_data(ttl=300)
+# Tăng TTL lên 600s (10 phút) để đỡ phải load lại nhiều lần
+@st.cache_data(ttl=600, show_spinner=False)
 def load_teacher_data(giao_vien_id_param):
-    all_classes_res = supabase.table("lop_hoc").select("*").execute()
-    all_students_res = supabase.table("hoc_sinh").select("*").execute()
-    teacher_assignments_res = supabase.table("phan_cong_giang_day").select(
-        "lop_id, lop_hoc(khoi, ten_lop)"
-    ).eq("giao_vien_id", giao_vien_id_param).execute()
+    # 1. Lấy thông tin cá nhân (Nhẹ)
+    gv_info_res = supabase.table("giao_vien").select("chuc_vu, avatar, email").eq("id",
+                                                                                  giao_vien_id_param).maybe_single().execute()
+    gv_data = gv_info_res.data or {}
+    chuc_vu = gv_data.get("chuc_vu", "Giáo viên")
+    avatar = gv_data.get("avatar")
+    email = gv_data.get("email", "")
 
-    all_classes = all_classes_res.data or []
-    all_students = all_students_res.data or []
+    # 2. Lấy phân công giảng dạy TRƯỚC (Để biết dạy lớp nào)
+    teacher_assignments_res = supabase.table("phan_cong_giang_day").select("lop_id, lop_hoc(khoi, ten_lop)").eq(
+        "giao_vien_id", giao_vien_id_param).execute()
     teacher_assignments = teacher_assignments_res.data or []
 
+    # Xử lý danh sách lớp dạy
     teacher_classes = []
-    # Set dùng để kiểm tra trùng lặp ID lớp
-    added_class_ids = set()
+    class_ids_taught = []  # List chứa ID các lớp giáo viên dạy
 
+    seen_ids = set()
     for a in teacher_assignments:
         lop_id = a["lop_id"]
-
-        # --- FIX LỖI: Chỉ thêm nếu lớp chưa có trong danh sách ---
-        if lop_id not in added_class_ids:
+        if lop_id not in seen_ids:
             lop = a.get("lop_hoc", {})
             if lop:
                 teacher_classes.append({
@@ -113,33 +114,62 @@ def load_teacher_data(giao_vien_id_param):
                     "ten_lop": lop.get("ten_lop"),
                     "khoi": lop.get("khoi")
                 })
-                added_class_ids.add(str(lop_id))
-        # ---------------------------------------------------------
+                class_ids_taught.append(lop_id)
+                seen_ids.add(lop_id)
 
-    teacher_students = [s for s in all_students if str(s.get("lop_id")) in added_class_ids]
-    return all_classes, all_students, teacher_classes, teacher_students
+    # 3. Lấy danh sách Lớp học toàn trường (Nhẹ - Bảng này thường ít dòng)
+    all_classes_res = supabase.table("lop_hoc").select("*").execute()
+    all_classes = all_classes_res.data or []
+
+    # 4. [QUAN TRỌNG] Lấy danh sách Học sinh CÓ CHỌN LỌC
+    # Thay vì lấy "*", ta dùng .in_() để chỉ lấy HS thuộc các lớp mình dạy
+    # Nếu là Ban giám hiệu (xem tất cả) thì mới load hết, còn GV thường chỉ load lớp mình
+
+    all_students = []
+    teacher_students = []
+
+    if chuc_vu in ["Ban giám hiệu", "Tổ trưởng"]:
+        # Nếu là lãnh đạo, load hết (chấp nhận chậm hơn chút nhưng cần thiết)
+        all_students_res = supabase.table("hoc_sinh").select("*").execute()
+        all_students = all_students_res.data or []
+        # Lọc lại HS của GV
+        teacher_students = [s for s in all_students if s.get("lop_id") in class_ids_taught]
+    else:
+        # Nếu là GV thường -> CHỈ LOAD HS THUỘC LỚP MÌNH DẠY
+        if class_ids_taught:
+            # Supabase hỗ trợ filter theo list: lop_id in (1, 2, 3...)
+            students_res = supabase.table("hoc_sinh").select("*").in_("lop_id", class_ids_taught).execute()
+            teacher_students = students_res.data or []
+            # Với GV thường, all_students coi như bằng teacher_students để tiết kiệm
+            all_students = teacher_students
+        else:
+            teacher_students = []
+            all_students = []
+
+    return chuc_vu, avatar, email, all_classes, all_students, teacher_classes, teacher_students
 
 
-all_classes, all_students, teacher_classes, teacher_students = load_teacher_data(giao_vien_id)
+# Hiển thị Spinner để người dùng biết đang tải
+with st.spinner("⏳ Đang tải dữ liệu lớp học..."):
+    try:
+        current_chuc_vu, current_avatar_file, current_email, all_classes, all_students, teacher_classes, teacher_students = load_teacher_data(
+            giao_vien_id)
+    except Exception as e:
+        st.error(f"Lỗi tải dữ liệu: {e}")
+        st.stop()
+
 teacher_class_options = {c["ten_lop"]: str(c["id"]) for c in teacher_classes}
 
 # ==========================
-# UI KHUNG 2 CỘT
+# UI KHUNG 2 CỘT ([2, 5])
 # ==========================
-col1, col2 = st.columns([1, 5])
+col1, col2 = st.columns([2, 5])
 
 # ==========================
 # CỘT TRÁI – THÔNG TIN GV
 # ==========================
 with col1:
-    try:
-        gv_info = supabase.table("giao_vien").select("avatar").eq("id", giao_vien_id).maybe_single().execute()
-        current_avatar_file = gv_info.data.get("avatar") if gv_info.data else None
-    except:
-        current_avatar_file = None
-
     avatar_path = os.path.join("data", "avatar", "GV", current_avatar_file) if current_avatar_file else ""
-
     if os.path.exists(avatar_path):
         img_b64 = get_img_as_base64(avatar_path)
         img_src = f"data:image/png;base64,{img_b64}"
@@ -147,21 +177,9 @@ with col1:
         img_src = "https://cdn-icons-png.flaticon.com/512/1995/1995574.png"
 
     st.markdown(f"""
-        <style>
-            .gv-profile {{
-                display: flex; flex-direction: column; align-items: center; text-align: center;
-            }}
-            .gv-img {{
-                border-radius: 50%; border: 3px solid #ff6600; padding: 2px;
-                width: 130px; height: 130px; object-fit: cover; margin-bottom: 10px;
-            }}
-            .gv-name {{
-                font-family: 'Times New Roman'; font-size: 20px; font-weight: bold; color: #004d99;
-            }}
-        </style>
-        <div class="gv-profile">
-            <img src="{img_src}" class="gv-img">
-            <div class="gv-name">{giao_vien_ten}</div>
+        <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+            <img src="{img_src}" style="border-radius: 50%; border: 3px solid #ff6600; padding: 2px; width: 140px; height: 140px; object-fit: cover; margin-bottom: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+            <div style="font-family: 'Times New Roman'; font-size: 22px; font-weight: bold; color: #004d99; margin-bottom: 5px;">{giao_vien_ten}</div>
         </div>
     """, unsafe_allow_html=True)
 
@@ -170,54 +188,52 @@ with col1:
 
     st.divider()
 
+    # Đổi Avatar
     with st.expander("🖼️ Đổi Avatar"):
         avatars = get_available_avatars("GV")
         if not avatars:
             st.warning("Chưa có ảnh trong data/avatar/GV")
         else:
-            cols = st.columns(3)
+            cols = st.columns(2)
             for i, file_name in enumerate(avatars):
-                with cols[i % 3]:
+                with cols[i % 2]:
                     file_path = os.path.join("data", "avatar", "GV", file_name)
-                    st.image(file_path, width='stretch')
+                    st.image(file_path, width=85)
                     if file_name == current_avatar_file:
-                        st.button("✅", key=f"gv_avt_curr_{i}", disabled=True)
+                        st.button("✅", key=f"gv_avt_curr_{i}", disabled=True, use_container_width=True)
                     else:
-                        if st.button("Chọn", key=f"gv_avt_pick_{i}"):
+                        if st.button("Chọn", key=f"gv_avt_pick_{i}", use_container_width=True):
                             supabase.table("giao_vien").update({"avatar": file_name}).eq("id", giao_vien_id).execute()
-                            st.success("Đã đổi!")
+                            load_teacher_data.clear()
                             st.rerun()
 
+    # Sửa thông tin
     with st.expander("📝 Sửa thông tin"):
         with st.form("update_teacher_info_form"):
             new_ho_ten = st.text_input("Họ tên", value=giao_vien_ten)
-            try:
-                cur_email_res = supabase.table("giao_vien").select("email").eq("id", giao_vien_id).execute()
-                cur_email = cur_email_res.data[0]["email"] if cur_email_res.data else ""
-            except:
-                cur_email = ""
-
-            new_email = st.text_input("Email", value=cur_email)
-            if st.form_submit_button("Lưu thông tin", width='stretch', type="primary"):
+            new_email = st.text_input("Email", value=current_email)
+            if st.form_submit_button("Lưu thông tin", use_container_width=True, type="primary"):
                 supabase.table("giao_vien").update({"ho_ten": new_ho_ten, "email": new_email}).eq("id",
                                                                                                   giao_vien_id).execute()
                 st.session_state["giao_vien_ten"] = new_ho_ten
-                st.success("Cập nhật thành công!")
+                load_teacher_data.clear()
+                st.success("Thành công!")
                 st.rerun()
 
+    # Đổi mật khẩu
     with st.expander("🔑 Đổi mật khẩu"):
         with st.form("change_password_form", clear_on_submit=True):
             p1 = st.text_input("Mật khẩu mới", type="password")
             p2 = st.text_input("Xác nhận mật khẩu", type="password")
-            if st.form_submit_button("Lưu mật khẩu mới", width='stretch', type="primary"):
+            if st.form_submit_button("Lưu mật khẩu", use_container_width=True, type="primary"):
                 if p1 == p2 and p1:
                     supabase.table("giao_vien").update({"mat_khau": p1}).eq("id", giao_vien_id).execute()
-                    st.success("Đổi mật khẩu thành công!")
+                    st.success("Thành công!")
                 else:
-                    st.error("Mật khẩu không hợp lệ.")
+                    st.error("Mật khẩu không khớp.")
 
     st.divider()
-    if st.button("🔓 Đăng xuất", width='stretch', type="primary"):
+    if st.button("🔓 Đăng xuất", use_container_width=True, type="primary"):
         st.session_state.clear()
         st.switch_page("app.py")
 
@@ -240,9 +256,16 @@ with col2:
     if SHOW_CONTRIBUTE_TAB:
         TAB_NAMES.append("✍️ Đóng góp câu hỏi")
 
+    default_index = 0
+    if "teacher_active_tab_radio" in st.session_state:
+        current_selection = st.session_state["teacher_active_tab_radio"]
+        if current_selection in TAB_NAMES:
+            default_index = TAB_NAMES.index(current_selection)
+
     selected_tab = st.radio(
         "Điều hướng:",
         TAB_NAMES,
+        index=default_index,
         horizontal=True,
         label_visibility="collapsed",
         key="teacher_active_tab_radio"
@@ -250,6 +273,7 @@ with col2:
 
     st.divider()
 
+    # Render Tabs
     if selected_tab == "📘 Lớp học":
         render_tab_classes.render(teacher_classes, teacher_students, teacher_class_options)
     elif selected_tab == "📈 Kết quả HS":

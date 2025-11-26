@@ -3,11 +3,8 @@
 # ===============================================
 import streamlit as st
 import pandas as pd
-from backend.data_service import (
-    get_student,
-    get_announcements_for_student  # Hàm này đã được update ở Bước 2
-)
-
+from backend.data_service import (get_student,get_announcements_for_student)
+import os
 # Import UI modules
 from pages.student_pages import ui_info
 from pages.student_pages import ui_dashboard
@@ -15,6 +12,7 @@ from pages.student_pages import ui_learning
 from pages.student_pages import ui_history
 
 st.set_page_config(page_title="AI Tutor - Học sinh", page_icon="📘", layout="wide")
+
 
 # CSS
 st.markdown("""
@@ -25,13 +23,31 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# 1. Lấy vị trí file students.py hiện tại (.../pages/)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 2. Lấy thư mục cha của nó (tức là thư mục gốc dự án AI_Tutor)
+root_dir = os.path.dirname(current_dir)
+
+# 3. Nối đường dẫn từ gốc vào data/banner.jpg
+banner_path = os.path.join(root_dir, 'data', 'banner.jpg')
+
 try:
-    st.image("data/banner.jpg", width='stretch')
-except:
-    pass
+    if os.path.exists(banner_path):
+        st.image(banner_path, use_column_width=True)
+    else:
+        # In ra đường dẫn sai để debug nếu vẫn lỗi
+        st.error(f"Vẫn không thấy file tại: {banner_path}")
+        st.markdown("<h1 style='text-align: center;'>🎓 AI TUTOR</h1>", unsafe_allow_html=True)
+except Exception as e:
+    st.error(f"Lỗi: {e}")
 
 if "hoc_sinh_id" not in st.session_state:
-    st.switch_page("app.py")
+    # Thay vì switch ngay, hiện thông báo và nút bấm để tránh lỗi RerunData vòng lặp
+    st.warning("Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn.")
+    if st.button("Về trang đăng nhập"):
+        st.switch_page("app.py")
+    st.stop() # Dừng code lại để không chạy tiếp phần dưới gây lỗi
 
 # Tải dữ liệu session
 hoc_sinh_id = st.session_state["hoc_sinh_id"]

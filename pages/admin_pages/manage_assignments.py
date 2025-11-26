@@ -52,7 +52,7 @@ def render():
             if not gv_options or not lop_options or not mh_options:
                 st.warning(
                     f"⚠️ Cần có ít nhất một Giáo viên, Môn học, và Lớp học (của năm {selected_year}) trong hệ thống để tạo phân công.")
-                st.form_submit_button("Thêm phân công", disabled=True, width='stretch')
+                st.form_submit_button("Thêm phân công", disabled=True, use_container_width=True)
             else:
                 gv_ten = st.selectbox("Chọn Giáo viên *", list(gv_options.keys()), index=None,
                                       placeholder="Chọn giáo viên...")
@@ -66,7 +66,7 @@ def render():
                 # Năm học sẽ lấy từ biến toàn cục
                 nam_hoc_display = st.text_input("Năm học", value=selected_year, disabled=True)
 
-                submitted = st.form_submit_button("➕ Thêm phân công", width='stretch')
+                submitted = st.form_submit_button("➕ Thêm phân công", use_container_width=True)
                 if submitted:
                     selected_gv_id = gv_options.get(gv_ten)
                     selected_lop_id = lop_options.get(lop_ten)
@@ -146,7 +146,7 @@ def render():
                 df_to_show[cols_exist],
                 key="assign_df_select",
                 hide_index=True,
-                width='stretch',  # <-- ĐÃ CẬP NHẬT
+                use_container_width=True,  # <-- ĐÃ CẬP NHẬT
                 on_select="rerun",
                 selection_mode="single-row"
             )
@@ -197,7 +197,7 @@ def render():
 
                         col_update, col_delete, col_clear = st.columns(3)
 
-                        if col_update.form_submit_button("💾 Lưu thay đổi", width='stretch', disabled=disabled_editing):
+                        if col_update.form_submit_button("💾 Lưu thay đổi", use_container_width=True, disabled=disabled_editing):
                             update_data = {"vai_tro": vai_tro_edit}  # nam_hoc không được phép sửa
                             try:
                                 supabase.table(table_name).update(update_data).eq("id", selected_item_original[
@@ -207,7 +207,7 @@ def render():
                             except Exception as e:
                                 st.error(f"Lỗi cập nhật: {e}")
 
-                        if col_delete.form_submit_button("❌ Xóa phân công này", width='stretch',
+                        if col_delete.form_submit_button("❌ Xóa phân công này", use_container_width=True,
                                                          disabled=disabled_editing):
                             try:
                                 supabase.table(table_name).delete().eq("id", selected_item_original["id"]).execute()
@@ -216,7 +216,7 @@ def render():
                             except Exception as e:
                                 st.error(f"Lỗi khi xóa: {e}")
 
-                        if col_clear.form_submit_button("Hủy chọn", width='stretch'):
+                        if col_clear.form_submit_button("Hủy chọn", use_container_width=True):
                             if 'assign_selected_item_id' in st.session_state: del st.session_state[
                                 'assign_selected_item_id']
                             st.rerun()
@@ -249,7 +249,7 @@ def render():
                 if not gv_email_to_id or not lop_options or not mh_options:
                     st.error(
                         f"Lỗi: Thiếu dữ liệu Giáo viên, Lớp học hoặc Môn học (của năm học {selected_year}) trong hệ thống để thực hiện import.")
-                elif st.button("🚀 Import Phân công", width='stretch'):
+                elif st.button("🚀 Import Phân công", use_container_width=True):
                     if not selected_year:
                         st.error("Không có Năm học được chọn.")
                         st.stop()

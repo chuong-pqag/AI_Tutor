@@ -153,7 +153,7 @@ def render(teacher_students, teacher_classes, all_classes):
                 hole=0.4  # Donut chart
             )
             fig_pie.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=300)
-            st.plotly_chart(fig_pie, width='stretch')
+            st.plotly_chart(fig_pie, use_container_width=True)
 
         # --- BIỂU ĐỒ 2: LINE CHART (TIẾN BỘ THEO TUẦN) ---
         with col_chart2:
@@ -190,4 +190,4 @@ def render(teacher_students, teacher_classes, all_classes):
         'Kết quả': df_filtered.apply(lambda r: f"{r.get('so_cau_dung')}/{r.get('tong_cau')}", axis=1)
     })
 
-    st.dataframe(df_display, width='stretch', hide_index=True)
+    st.dataframe(df_display, use_container_width=True, hide_index=True)

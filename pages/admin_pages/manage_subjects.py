@@ -25,7 +25,7 @@ def render():
             khoi_ap_dung_str = st.text_input("Khối áp dụng (VD: 1,2,3)",
                                              help="Nhập các khối lớp cách nhau bởi dấu phẩy.")
 
-            submitted = st.form_submit_button("Thêm môn học", width='stretch')  # <-- ĐÃ CẬP NHẬT
+            submitted = st.form_submit_button("Thêm môn học", use_container_width=True)  # <-- ĐÃ CẬP NHẬT
             if submitted:
                 if not ten_mon:
                     st.error("Tên môn học không được để trống.")
@@ -84,7 +84,7 @@ def render():
                 df_mh_display[cols_exist],
                 key="mh_df_select",
                 hide_index=True,
-                width='stretch',  # <-- ĐÃ CẬP NHẬT
+                use_container_width=True,  # <-- ĐÃ CẬP NHẬT
                 on_select="rerun",
                 selection_mode="single-row"
             )
@@ -115,7 +115,7 @@ def render():
 
                         col_update, col_delete, col_clear = st.columns(3)
 
-                        if col_update.form_submit_button("Lưu thay đổi", width='stretch'):  # <-- ĐÃ CẬP NHẬT
+                        if col_update.form_submit_button("Lưu thay đổi", use_container_width=True):  # <-- ĐÃ CẬP NHẬT
                             khoi_ap_dung_list_edit = []
                             if khoi_ap_dung_str_edit:
                                 try:
@@ -136,7 +136,7 @@ def render():
                             except Exception as e:
                                 st.error(f"Lỗi cập nhật: {e}")
 
-                        if col_delete.form_submit_button("❌ Xóa môn học này", width='stretch'):  # <-- ĐÃ CẬP NHẬT
+                        if col_delete.form_submit_button("❌ Xóa môn học này", use_container_width=True):  # <-- ĐÃ CẬP NHẬT
                             try:
                                 supabase.table(table_name).delete().eq("id", selected_item_original[
                                     "id"]).execute();
@@ -144,7 +144,7 @@ def render():
                                 crud_utils.clear_cache_and_rerun()
                             except Exception as e:
                                 st.error(f"Lỗi khi xóa: {e}.")
-                        if col_clear.form_submit_button("Hủy chọn", width='stretch'):  # <-- ĐÃ CẬP NHẬT
+                        if col_clear.form_submit_button("Hủy chọn", use_container_width=True):  # <-- ĐÃ CẬP NHẬT
                             if 'mh_selected_item_id' in st.session_state: del st.session_state['mh_selected_item_id']
                             st.rerun()
         else:
@@ -162,9 +162,9 @@ def render():
             if uploaded_mh:
                 try:
                     df_upload_mh = pd.read_excel(uploaded_mh, dtype=str)
-                    st.dataframe(df_upload_mh.head(), width='stretch')  # <-- ĐÃ CẬP NHẬT
+                    st.dataframe(df_upload_mh.head(), use_container_width=True)  # <-- ĐÃ CẬP NHẬT
 
-                    if st.button("🚀 Import Môn Học", width='stretch'):  # <-- ĐÃ CẬP NHẬT
+                    if st.button("🚀 Import Môn Học", use_container_width=True):  # <-- ĐÃ CẬP NHẬT
                         count = 0;
                         errors = []
                         with st.spinner("Đang import..."):

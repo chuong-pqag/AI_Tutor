@@ -76,7 +76,7 @@ def render():
 
             muc_do = st.selectbox("Mức độ *", MUC_DO_OPTIONS, key="topic_add_mucdo", index=0)
 
-            submitted = st.form_submit_button("➕ Thêm chủ đề", width='stretch')
+            submitted = st.form_submit_button("➕ Thêm chủ đề", use_container_width=True)
             if submitted:
                 if not mon_hoc_options or mon_hoc_ten is None:
                     st.error("Chưa có môn học nào hoặc chưa chọn môn học.")
@@ -178,7 +178,7 @@ def render():
                 df_to_show[cols_display_cd_ordered],
                 key="cd_df_select",
                 hide_index=True,
-                width='stretch',
+                use_container_width=True,
                 on_select="rerun",
                 selection_mode="single-row"
             )
@@ -254,7 +254,7 @@ def render():
                         muc_do_edit = st.selectbox("Mức độ", MUC_DO_OPTIONS, index=md_idx, disabled=disabled_editing)
 
                         col_update, col_delete, col_clear = st.columns(3)
-                        if col_update.form_submit_button("💾 Lưu thay đổi", width='stretch', disabled=disabled_editing):
+                        if col_update.form_submit_button("💾 Lưu thay đổi", use_container_width=True, disabled=disabled_editing):
                             # Nếu không bị disable, sử dụng lop_edit từ selectbox, nếu không thì dùng giá trị cũ
                             final_lop_value = lop_edit if not disabled_editing else selected_item_original.get("lop", 1)
 
@@ -274,7 +274,7 @@ def render():
                                 crud_utils.clear_cache_and_rerun()
                             except Exception as e:
                                 st.error(f"Lỗi: {e}")
-                        if col_delete.form_submit_button("❌ Xóa", width='stretch', disabled=disabled_editing):
+                        if col_delete.form_submit_button("❌ Xóa", use_container_width=True, disabled=disabled_editing):
                             try:
                                 supabase.table(table_name).delete().eq("id", selected_item_original[
                                     'id']).execute();
@@ -282,7 +282,7 @@ def render():
                                 crud_utils.clear_cache_and_rerun()
                             except Exception as e:
                                 st.error(f"Lỗi: {e}. Chủ đề có thể đang được sử dụng (bài học, câu hỏi...).")
-                        if col_clear.form_submit_button("Hủy", width='stretch'):
+                        if col_clear.form_submit_button("Hủy", use_container_width=True):
                             if 'cd_selected_item_id' in st.session_state: del st.session_state['cd_selected_item_id']
                             st.rerun()
         else:
@@ -311,7 +311,7 @@ def render():
 
                 if not valid_mon_hoc_ids:
                     st.error("Chưa có môn học nào.")
-                elif st.button("🚀 Import Chủ đề", width='stretch'):
+                elif st.button("🚀 Import Chủ đề", use_container_width=True):
                     count = 0;
                     errors = []
 

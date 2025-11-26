@@ -29,7 +29,7 @@ def render_history(hoc_sinh_id):
             'Kết quả': df_results.apply(lambda row: f"{row.get('so_cau_dung', '?')}/{row.get('tong_cau', '?')}",
                                         axis=1)
         }).dropna(subset=['Ngày làm'])
-        st.dataframe(df_display, width='stretch', hide_index=True)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
     else:
         st.info("Chưa có kết quả bài làm.")
 
@@ -52,6 +52,6 @@ def render_history(hoc_sinh_id):
             trang_thai = path.get('trang_thai', 'Chưa thực hiện')
             df_paths_processed.append(
                 {'Ngày gợi ý': ngay_goi_y, 'Gợi ý': loai_goi_y_vn, 'Nội dung': noi_dung, 'Trạng thái': trang_thai})
-        st.dataframe(pd.DataFrame(df_paths_processed), width='stretch', hide_index=True)
+        st.dataframe(pd.DataFrame(df_paths_processed), use_container_width=True, hide_index=True)
     else:
         st.info("Chưa có lộ trình học nào.")

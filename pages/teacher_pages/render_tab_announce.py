@@ -68,7 +68,7 @@ def render(giao_vien_id, teacher_class_options, TAB_NAMES):
         tieu_de = st.text_input("3. Tiêu đề *")
         noi_dung = st.text_area("4. Nội dung *")
 
-        submitted = st.form_submit_button("🚀 Gửi ngay", width='stretch')
+        submitted = st.form_submit_button("🚀 Gửi ngay", use_container_width=True)
 
         if submitted:
             if not tieu_de or not noi_dung:

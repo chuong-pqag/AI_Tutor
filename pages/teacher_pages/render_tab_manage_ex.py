@@ -132,7 +132,7 @@ def render(giao_vien_id, teacher_classes):
         df_display,
         key="teacher_ex_df_select",
         hide_index=True,
-        width='stretch',
+        use_container_width=True,
         on_select="rerun",
         selection_mode="single-row"
     )
@@ -164,7 +164,7 @@ def render(giao_vien_id, teacher_classes):
             with st.form(f"edit_ex_form_{selected_id}"):
                 new_title = st.text_input("Sửa Tiêu đề Bài tập/Kiểm tra", value=selected_ex['tieu_de'])
 
-                if st.form_submit_button("💾 Lưu tiêu đề mới", width='stretch'):
+                if st.form_submit_button("💾 Lưu tiêu đề mới", use_container_width=True):
                     if new_title and new_title != selected_ex['tieu_de']:
                         try:
                             update_exercise_title(selected_id, new_title)
@@ -182,7 +182,7 @@ def render(giao_vien_id, teacher_classes):
             is_safe_to_delete = can_delete_exercise(selected_id)
 
             with col_delete_btn:
-                if st.button("❌ Xóa Bài tập này", key=f"delete_ex_{selected_id}", width='stretch',
+                if st.button("❌ Xóa Bài tập này", key=f"delete_ex_{selected_id}", use_container_width=True,
                              disabled=not is_safe_to_delete):
                     try:
                         delete_exercise_and_links(selected_id)
@@ -196,7 +196,7 @@ def render(giao_vien_id, teacher_classes):
                     st.caption("⚠️ *Không thể xóa vì đã có học sinh làm bài.*")
 
             with col_view:
-                with st.popover("👁️ Xem Nội dung câu hỏi", width='stretch'):
+                with st.popover("👁️ Xem Nội dung câu hỏi", use_container_width=True):
                     st.markdown(f"##### {selected_ex['tieu_de']} ({len(questions)} câu)")
                     if questions:
                         for i, q_link in enumerate(questions):

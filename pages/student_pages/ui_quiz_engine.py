@@ -150,10 +150,10 @@ def render_question_widget(q, widget_key, current_lop):
             with cols[i]:
                 is_sel = (cur_val == opt)
                 if st.button("✅ Đã chọn" if is_sel else "Chọn", key=f"btn_{widget_key}_{i}",
-                             type="primary" if is_sel else "secondary", width='stretch'):
+                             type="primary" if is_sel else "secondary", use_container_width=True):
                     st.session_state[widget_key] = opt
                     st.rerun()
-                st.image(opt, width='stretch')
+                st.image(opt, use_container_width=True)
     elif loai == "mot_lua_chon":
         st.radio("Chọn đáp án:", options, key=widget_key, index=None)
     elif loai == "nhieu_lua_chon":

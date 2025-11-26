@@ -268,7 +268,7 @@ def render():
                 tieu_de = st.text_input("Tiêu đề video *", placeholder="Ví dụ: Giới thiệu phép cộng")
                 url = st.text_input("URL video *", placeholder="Dán link video vào đây...")
                 mo_ta = st.text_area("Mô tả (Tùy chọn)", placeholder="Nội dung tóm tắt của video...")
-                submitted_details = st.form_submit_button("➕ Thêm video", width='stretch')
+                submitted_details = st.form_submit_button("➕ Thêm video", use_container_width=True)
                 if submitted_details:
                     final_lesson_id = selected_lesson_id
                     if not final_lesson_id:
@@ -380,7 +380,7 @@ def render():
             df_to_show[cols_exist],
             key="vid_df_select",
             hide_index=True,
-            width='stretch',
+            use_container_width=True,
             on_select=crud_utils.clear_cache_and_rerun,
             selection_mode="single-row"
         )
@@ -507,7 +507,7 @@ def render():
                         "mo_ta") else "", placeholder="Nhập mô tả...", disabled=disabled_editing)
 
                     col_update, col_delete, col_clear = st.columns(3)
-                    if col_update.form_submit_button("💾 Lưu thay đổi", width='stretch',
+                    if col_update.form_submit_button("💾 Lưu thay đổi", use_container_width=True,
                                                      disabled=disabled_editing):
                         if not selected_lesson_id_edit:
                             st.error("Vui lòng chọn Bài học hợp lệ.")
@@ -525,7 +525,7 @@ def render():
                                 crud_utils.clear_cache_and_rerun()
                             except Exception as e:
                                 st.error(f"Lỗi cập nhật: {e}")
-                    if col_delete.form_submit_button("❌ Xóa video này", width='stretch',
+                    if col_delete.form_submit_button("❌ Xóa video này", use_container_width=True,
                                                      disabled=disabled_editing):
                         try:
                             supabase.table(table_name).delete().eq("id",
@@ -535,7 +535,7 @@ def render():
                             crud_utils.clear_cache_and_rerun()
                         except Exception as e:
                             st.error(f"Lỗi xóa: {e}")
-                    if col_clear.form_submit_button("Hủy chọn", width='stretch'):
+                    if col_clear.form_submit_button("Hủy chọn", use_container_width=True):
                         if 'vid_selected_item_id' in st.session_state: del st.session_state[
                             'vid_selected_item_id']; crud_utils.clear_cache_and_rerun()
         else:

@@ -13,6 +13,12 @@ import os
 from backend.data_service import get_all_school_years, get_current_school_year
 from backend.utils import get_available_avatars, get_img_as_base64
 from backend.supabase_client import supabase
+import warnings
+
+# --- THÊM ĐOẠN NÀY ĐỂ TẮT CẢNH BÁO ---
+# Tắt cảnh báo use_column_width (do lệch phiên bản)
+warnings.filterwarnings("ignore", message=".*use_column_width.*")
+# -------------------------------------
 
 # Import các module con
 try:
@@ -51,9 +57,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 try:
-    st.image("data/banner.jpg", width='stretch')
+    st.image("data/banner.jpg", use_column_width=True)
 except Exception:
-    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", width='stretch')
+    st.image("https://via.placeholder.com/1200x200/4CAF50/FFFFFF?text=AI+Tutor+Banner", use_column_width=True)
 
 # 🔐 Kiểm tra đăng nhập
 if "role" not in st.session_state or st.session_state["role"] != "admin":
@@ -122,7 +128,7 @@ with col1:
             for i, file_name in enumerate(avatars):
                 with cols[i % 3]:
                     file_path = os.path.join("data", "avatar", "ADMIN", file_name)
-                    st.image(file_path, width='stretch')
+                    st.image(file_path, use_column_width=True)
 
                     if file_name == current_avatar_file:
                         st.button("✅", key=f"adm_avt_curr_{i}", disabled=True)
@@ -138,7 +144,7 @@ with col1:
                             except Exception as e:
                                 st.error(f"Lỗi: {e}")
 
-    if st.button("🔓 Đăng xuất", width='stretch', type="primary"):
+    if st.button("🔓 Đăng xuất", use_container_width=True, type="primary"):
         st.session_state.clear();
         st.switch_page("app.py")
 

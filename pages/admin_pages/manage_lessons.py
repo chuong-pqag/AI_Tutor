@@ -148,7 +148,7 @@ def render(mon_hoc_options):
                 mo_ta = st.text_area("Mô tả")
                 uploaded_pdf = st.file_uploader("Tải Nội dung PDF", type=["pdf"], key="lesson_pdf_upload")
 
-                submitted = st.form_submit_button("➕ Thêm bài học", width='stretch')
+                submitted = st.form_submit_button("➕ Thêm bài học", use_container_width=True)
                 if submitted:
                     if not ten_bai_hoc:
                         st.error("Tên bài học trống.")
@@ -248,7 +248,7 @@ def render(mon_hoc_options):
                     columns={"ten_bai_hoc": "Tên bài học", "thu_tu": "Thứ tự", "noi_dung_pdf_url": "Link PDF"}),
                 key="lesson_df_select",
                 hide_index=True,
-                width='stretch',  # <-- ĐÃ CẬP NHẬT
+                use_container_width=True,  # <-- ĐÃ CẬP NHẬT
                 on_select="rerun",
                 selection_mode="single-row"
             )
@@ -312,7 +312,7 @@ def render(mon_hoc_options):
                         delete_pdf_flag = st.checkbox("Xóa PDF hiện tại", key="del_pdf_flag", disabled=disabled_editing)
 
                         col_update, col_delete, col_clear = st.columns(3)
-                        if col_update.form_submit_button("💾 Lưu thay đổi", width='stretch', disabled=disabled_editing):
+                        if col_update.form_submit_button("💾 Lưu thay đổi", use_container_width=True, disabled=disabled_editing):
                             update_data = {"ten_bai_hoc": ten_bai_hoc_edit,
                                            "chu_de_id": chu_de_opts_local.get(chu_de_ten_edit),
                                            "thu_tu": thu_tu_edit,
@@ -342,7 +342,7 @@ def render(mon_hoc_options):
                             except Exception as e:
                                 st.error(f"Lỗi cập nhật CSDL: {e}")
 
-                        if col_delete.form_submit_button("❌ Xóa", width='stretch', disabled=disabled_editing):
+                        if col_delete.form_submit_button("❌ Xóa", use_container_width=True, disabled=disabled_editing):
                             st.info("Đang xóa PDF (nếu có)...");
                             delete_pdf_from_storage(selected_item_original.get("noi_dung_pdf_url"))
                             try:
@@ -352,7 +352,7 @@ def render(mon_hoc_options):
                             except Exception as e:
                                 st.error(f"Lỗi xóa: {e}")
 
-                        if col_clear.form_submit_button("Hủy", width='stretch'):
+                        if col_clear.form_submit_button("Hủy", use_container_width=True):
                             if 'lesson_selected_item_id' in st.session_state: del st.session_state[
                                 'lesson_selected_item_id']; st.rerun()
         else:
@@ -380,7 +380,7 @@ def render(mon_hoc_options):
 
                 if not valid_chu_de_ids:
                     st.error(f"Chưa có chủ đề nào hoạt động trong Năm học **{selected_year}** để import bài học.")
-                elif st.button("🚀 Import Bài Học", width='stretch'):
+                elif st.button("🚀 Import Bài Học", use_container_width=True):
                     count = 0;
                     errors = []
                     with st.spinner("Đang import..."):

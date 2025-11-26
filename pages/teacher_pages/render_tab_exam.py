@@ -151,7 +151,7 @@ def render(giao_vien_id, teacher_class_options, all_classes, TAB_NAMES):
     st.markdown("---")
 
     # NÚT SUBMIT (Vẫn giữ chức năng giao bài)
-    if st.button("🚀 Sinh & Giao bài ngay", type="primary", width='stretch', disabled=not is_valid_config):
+    if st.button("🚀 Sinh & Giao bài ngay", type="primary", use_container_width=True, disabled=not is_valid_config):
         if not ten_bai_kt:
             st.error("Vui lòng nhập tên bài kiểm tra.")
         else:

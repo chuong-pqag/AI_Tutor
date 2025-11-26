@@ -175,7 +175,7 @@ def render(mon_hoc_options):
 
                 diem_so = st.number_input("Điểm", min_value=0, value=1, key="q_diem")
 
-                submitted = st.form_submit_button("➕ Thêm câu hỏi", width='stretch')
+                submitted = st.form_submit_button("➕ Thêm câu hỏi", use_container_width=True)
 
                 if submitted:
                     dap_an_dung = [s.strip() for s in dap_an_dung_raw.split("\n") if s.strip()]
@@ -288,7 +288,7 @@ def render(mon_hoc_options):
                     columns={"hinh_anh_url": "Ảnh", "loai_cau_hoi": "Loại", "muc_do": "Mức độ"}),
                 key="quiz_df_select",
                 hide_index=True,
-                width='stretch',
+                use_container_width=True,
                 on_select="rerun",
                 selection_mode="single-row"
             )
@@ -340,7 +340,7 @@ def render(mon_hoc_options):
                         regen_tts = st.checkbox("Tạo lại Audio", disabled=disabled_editing)
 
                         c1, c2, c3 = st.columns(3)
-                        if c1.form_submit_button("💾 Lưu", width='stretch', disabled=disabled_editing):
+                        if c1.form_submit_button("💾 Lưu", use_container_width=True, disabled=disabled_editing):
                             d_dung = [s.strip() for s in dap_an_dung_raw_edit.split("\n") if s.strip()]
                             d_sai = [s.strip() for s in dap_an_khac_raw_edit.split("\n") if s.strip()]
 
@@ -367,7 +367,7 @@ def render(mon_hoc_options):
                             except Exception as e:
                                 st.error(f"Lỗi: {e}")
 
-                        if c2.form_submit_button("❌ Xóa", width='stretch', disabled=disabled_editing):
+                        if c2.form_submit_button("❌ Xóa", use_container_width=True, disabled=disabled_editing):
                             try:
                                 supabase.table(table_name).delete().eq("id", selected_item_original['id']).execute()
                                 st.warning("Đã xóa!");
@@ -375,7 +375,7 @@ def render(mon_hoc_options):
                             except Exception as e:
                                 st.error(f"Lỗi xóa: {e}")
 
-                        if c3.form_submit_button("Hủy", width='stretch'):
+                        if c3.form_submit_button("Hủy", use_container_width=True):
                             del st.session_state['quiz_selected_item_id'];
                             st.rerun()
 
@@ -409,7 +409,7 @@ def render(mon_hoc_options):
                 valid_chu_de_ids = active_chu_de_ids
                 if not valid_chu_de_ids:
                     st.error("Chưa có chủ đề nào hoạt động để import.")
-                elif st.button("🚀 Import Câu hỏi", width='stretch'):
+                elif st.button("🚀 Import Câu hỏi", use_container_width=True):
                     count = 0;
                     errors = []
                     tasks_to_queue = []
@@ -506,7 +506,7 @@ def render(mon_hoc_options):
                             new_muc_do = st.selectbox("Sửa mức độ:", MUC_DO_OPTIONS,
                                                       index=MUC_DO_OPTIONS.index(q['muc_do']), key=f"lvl_{q['id']}")
                             c_ok, c_no = st.columns(2)
-                            if c_ok.form_submit_button("✅ Duyệt", type="primary", width='stretch'):
+                            if c_ok.form_submit_button("✅ Duyệt", type="primary", use_container_width=True):
                                 try:
                                     supabase.table("cau_hoi").update(
                                         {"trang_thai_duyet": "approved", "muc_do": new_muc_do}).eq("id",
@@ -521,7 +521,7 @@ def render(mon_hoc_options):
                                 except Exception as e:
                                     st.error(f"Lỗi: {e}")
 
-                            if c_no.form_submit_button("❌ Từ chối", width='stretch'):
+                            if c_no.form_submit_button("❌ Từ chối", use_container_width=True):
                                 try:
                                     supabase.table("cau_hoi").update({"trang_thai_duyet": "rejected"}).eq("id", q[
                                         'id']).execute()
@@ -595,7 +595,7 @@ def render(mon_hoc_options):
                 # 4. Tạo DataFrame và Nút Download CSV
                 if results:
                     df_links = pd.DataFrame(results)
-                    st.dataframe(df_links, width='stretch')
+                    st.dataframe(df_links, use_container_width=True)
 
                     csv = df_links.to_csv(index=False).encode('utf-8')
                     st.download_button(
