@@ -12,9 +12,24 @@ jobs:
         with:
           fetch-depth: 0
           lfs: true
+      
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        # Mình đã thêm --force để ghi đè lịch sử cũ
-        # Và điền đúng link: spaces/chuongdd/ai_tutor
-        run: git push --force https://chuongdd:$HF_TOKEN@huggingface.co/spaces/chuongdd/ai_tutor main
+        run: |
+          # 1. Cài đặt Git LFS
+          git lfs install
+          
+          # 2. Theo dõi các file ảnh và file nặng
+          git lfs track "*.jpg" "*.jpeg" "*.png" "*.csv" "*.mp4"
+          
+          # 3. Cấu hình user ảo để commit file .gitattributes (file quản lý LFS)
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          
+          # 4. Thêm file .gitattributes vào git (nếu có thay đổi)
+          git add .gitattributes
+          git commit -m "Update LFS tracking" || true
+          
+          # 5. Đẩy code lên với --force
+          git push --force https://chuongdd:$HF_TOKEN@huggingface.co/spaces/chuongdd/ai_tutor main
