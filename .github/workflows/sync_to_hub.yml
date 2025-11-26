@@ -1,0 +1,45 @@
+name: Sync to Hugging Face hub
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+      
+      - name: Push to hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # 1. Cấu hình thông tin người dùng
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          
+          # 2. TUYỆT CHIÊU: Xóa folder .git cũ để bỏ qua toàn bộ lịch sử lỗi
+          rm -rf .git
+          
+          # 3. Khởi tạo lại repo mới tinh
+          git init
+          git branch -m main
+          
+          # 4. Cài đặt LFS cho repo mới này
+          git lfs install
+          git lfs track "*.jpg" "*.jpeg" "*.png" "*.csv" "*.mp4" "*.pkl" "*.json"
+          
+          # 5. Thêm file .gitattributes
+          git add .gitattributes
+          
+          # 6. Thêm tất cả các file còn lại
+          git add .
+          
+          # 7. Commit duy nhất (Sạch sẽ 100%)
+          git commit -m "Deploy to Hugging Face with LFS"
+          
+          # 8. Đẩy code lên (Dùng --force để ghi đè mọi thứ bên kia)
+          git push --force https://chuongdd:$HF_TOKEN@huggingface.co/spaces/chuongdd/ai_tutor main
