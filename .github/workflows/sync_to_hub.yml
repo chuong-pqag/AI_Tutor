@@ -17,24 +17,29 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Cấu hình Git User
+          # 1. Cấu hình thông tin người dùng
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           
-          # 1. Cài đặt Git LFS
+          # 2. TUYỆT CHIÊU: Xóa folder .git cũ để bỏ qua toàn bộ lịch sử lỗi
+          rm -rf .git
+          
+          # 3. Khởi tạo lại repo mới tinh
+          git init
+          git branch -m main
+          
+          # 4. Cài đặt LFS cho repo mới này
           git lfs install
+          git lfs track "*.jpg" "*.jpeg" "*.png" "*.csv" "*.mp4" "*.pkl" "*.json"
           
-          # 2. Theo dõi file ảnh/nặng
-          git lfs track "*.jpg" "*.jpeg" "*.png" "*.csv" "*.mp4"
-          
-          # 3. THAO TÁC QUAN TRỌNG NHẤT:
-          # Xóa cache index cũ và add lại toàn bộ để ép Git chuyển file sang LFS
+          # 5. Thêm file .gitattributes
           git add .gitattributes
-          git rm --cached -r . 
+          
+          # 6. Thêm tất cả các file còn lại
           git add .
           
-          # 4. Tạo commit mới đã được fix LFS
-          git commit -m "Convert binary files to LFS" || true
+          # 7. Commit duy nhất (Sạch sẽ 100%)
+          git commit -m "Deploy to Hugging Face with LFS"
           
-          # 5. Đẩy code lên
+          # 8. Đẩy code lên (Dùng --force để ghi đè mọi thứ bên kia)
           git push --force https://chuongdd:$HF_TOKEN@huggingface.co/spaces/chuongdd/ai_tutor main
