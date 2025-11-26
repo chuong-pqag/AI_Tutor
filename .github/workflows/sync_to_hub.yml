@@ -1,9 +1,7 @@
 name: Sync to Hugging Face hub
 on:
   push:
-    branches: [main] # Hoặc 'master' nếu nhánh chính của bạn tên là master
-
-  # Cho phép chạy thủ công bằng nút bấm nếu cần
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -17,4 +15,6 @@ jobs:
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        # Mình đã thêm --force để ghi đè lịch sử cũ
+        # Và điền đúng link: spaces/chuongdd/ai_tutor
         run: git push --force https://chuongdd:$HF_TOKEN@huggingface.co/spaces/chuongdd/ai_tutor main
