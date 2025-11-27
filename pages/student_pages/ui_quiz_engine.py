@@ -149,8 +149,7 @@ def render_question_widget(q, widget_key, current_lop):
         for i, opt in enumerate(options):
             with cols[i]:
                 is_sel = (cur_val == opt)
-                if st.button("✅ Đã chọn" if is_sel else "Chọn", key=f"btn_{widget_key}_{i}",
-                             type="primary" if is_sel else "secondary", use_column_width=True):
+                if st.button("✅ Đã chọn" if is_sel else "Chọn", key=f"btn_{widget_key}_{i}"):
                     st.session_state[widget_key] = opt
                     st.rerun()
                 st.image(opt, use_column_width=True)
