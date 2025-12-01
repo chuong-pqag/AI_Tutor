@@ -130,7 +130,7 @@ st.markdown("""
 current_dir = os.path.dirname(os.path.abspath(__file__))
 banner_path = os.path.join(current_dir, 'data', 'banner.jpg')
 if os.path.exists(banner_path):
-    st.image(banner_path, width='stretch)
+    st.image(banner_path, width='stretch')
 else:
     st.markdown("<h1>🎓 AI TUTOR</h1>", unsafe_allow_html=True)
 
@@ -147,17 +147,17 @@ with st.container():
         # Key ở đây khớp với session_state gọi trong hàm callback
         st.text_input("🔑 Mã học sinh", placeholder="Ví dụ: HS0001", key="hs_ma")
         st.text_input("🔒 Mã PIN (4 số)", type="password", key="hs_mk", max_chars=4)
-        st.button("Đăng nhập ngay 🚀", on_click=login_student,width='stretch)
+        st.button("Đăng nhập ngay 🚀", on_click=login_student,width='stretch')
 
     elif vai_tro == "👨‍🏫 Giáo viên":
         st.text_input("📧 Email", key="gv_email")
         st.text_input("🔒 Mật khẩu", type="password", key="gv_mk")
-        st.button("Đăng nhập Giáo viên", on_click=login_teacher,width='stretch)
+        st.button("Đăng nhập Giáo viên", on_click=login_teacher,width='stretch')
 
     elif vai_tro == "⚙️ Quản trị":
         st.text_input("👤 Tài khoản", key="qt_tk")
         st.text_input("🔒 Mật khẩu", type="password", key="qt_mk")
-        st.button("Đăng nhập Quản trị", on_click=login_admin,width='stretch)
+        st.button("Đăng nhập Quản trị", on_click=login_admin,width='stretch')
 
 # FOOTER
 st.markdown(
